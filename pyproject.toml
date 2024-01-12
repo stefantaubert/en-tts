@@ -3,7 +3,7 @@ name = "en-tts"
 version = "0.0.1"
 description = "Command-line interface for synthesizing English texts into speech."
 readme = "README.md"
-requires-python = ">=3.8, <4"
+requires-python = ">=3.8, <3.11"
 license = { text = "MIT" }
 authors = [{ name = "Stefan Taubert", email = "pypi@stefantaubert.com" }]
 maintainers = [{ name = "Stefan Taubert", email = "pypi@stefantaubert.com" }]
@@ -41,7 +41,6 @@ dependencies = [
   "pandas>=1.4.0",
   "ordered_set>=4.1.0",
   "matplotlib>=3.5.0",
-  "pronunciation_dictionary>=0.0.5",
 ]
 
 [project.urls]

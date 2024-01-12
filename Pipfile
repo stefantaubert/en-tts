@@ -14,6 +14,7 @@ pytest = "*"
 autoflake = "*"
 twine = "*"
 build = "*"
+wget = "*"
 
 [packages]
 scipy = ">=1.8.0"
@@ -23,7 +24,13 @@ TextGrid = ">=1.5"
 pandas = ">=1.4.0"
 ordered-set = ">=4.1.0"
 matplotlib = ">=3.5.0"
-pronunciation-dictionary = ">=0.0.5"
+dict-from-dict = {editable = true, path = "./../pronunciation-dict-creation"}
+pronunciation-dictionary = {editable = true, path = "./../pronunciation-dictionary"}
+pronunciation-dictionary-utils = {editable = true, path = "./../pronunciation-dictionary-utils"}
+tacotron = {editable = true, path = "./../tacotron"}
+waveglow-cli = {editable = true, path = "./../waveglow"}
+english-text-normalization = {editable = true, path = "./../english_text_normalization"}
+dict-from-g2pe = {editable = true, path = "./../dict-from-g2p"}
 
 [requires]
-python_version = "3.11"
+python_version = "3.10"
