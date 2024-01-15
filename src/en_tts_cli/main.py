@@ -41,6 +41,7 @@ from waveglow import TacotronSTFT, float_to_wav, normalize_wav, try_copy_to
 
 from en_tts_cli.argparse_helper import (parse_existing_directory, parse_existing_file, parse_path,
                                         parse_positive_integer)
+from en_tts_cli.arpa_ipa_mapping import ARPA_IPA_MAPPING
 from en_tts_cli.types import ExecutionResult
 
 
@@ -227,10 +228,10 @@ def synthesize(text: str, input_format: str, logger: Logger, flogger: Logger):
         flogger.info(f"Dict4 (ARPA): {logfile.absolute()}")
       # mappings = {}
       # TODO hier weitermachen
-      identify_and_apply_mappings(logger, flogger, dict4, mappings, partial_mapping=False,
+      identify_and_apply_mappings(logger, flogger, dict4, ARPA_IPA_MAPPING, partial_mapping=False,
                                   mp_options=MultiprocessingOptions(1, maxtasksperchild, 100_000))
-      # TODO hier noch oov mit g2pE nachschauen und dann noch mappen in ipa etc
-
+      
+      
     text_ipa = transcribe_text_using_dict(dict1, text_normed, "\n", "|", " ", seed=None, ignore_missing=False,
                                           n_jobs=n_jobs, maxtasksperchild=maxtasksperchild, chunksize=2_000_000)
 
