@@ -3,28 +3,23 @@ import pickle
 import re
 import shutil
 from argparse import ArgumentParser, Namespace
-from collections import OrderedDict
 from logging import Logger
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Any, Callable, Generator, List, Literal
-from typing import OrderedDict as ODType
-from typing import cast
+from typing import Any, Callable, Generator, Literal, cast
 
 import numpy as np
-import pandas as pd
 import torch
 import wget
 from dict_from_dict import create_dict_from_dict
 from dict_from_g2pE import transcribe_with_g2pE
 from english_text_normalization import *
 from english_text_normalization.normalization_pipeline import (
-  execute_pipeline, general_pipeline, remove_whitespace_before_sentence_punctuation)
+  execute_pipeline, remove_whitespace_before_sentence_punctuation)
+from ffmpy import FFmpeg
 from ordered_set import OrderedSet
-from pandas import DataFrame
 from pronunciation_dictionary import (DeserializationOptions, MultiprocessingOptions,
-                                      PronunciationDict, SerializationOptions,
-                                      get_weighted_pronunciation, load_dict, save_dict)
+                                      SerializationOptions, load_dict, save_dict)
 from pronunciation_dictionary_utils import (merge_dictionaries, replace_symbols_in_pronunciations,
                                             select_single_pronunciation)
 from pronunciation_dictionary_utils_cli.pronunciations_map_symbols_json import \
@@ -39,12 +34,9 @@ from txt_utils_cli.transcription import transcribe_text_using_dict
 from unidecode import unidecode_expect_ascii
 from waveglow import CheckpointWaveglow
 from waveglow import Synthesizer as WaveglowSynthesizer
-from waveglow import (TacotronSTFT, convert_glow, convert_glow_files, float_to_wav, normalize_wav,
-                      try_copy_to)
+from waveglow import convert_glow_files, float_to_wav, normalize_wav, try_copy_to
 from waveglow_cli import download_pretrained_model
 
-from en_tts_cli.argparse_helper import (parse_existing_directory, parse_existing_file, parse_path,
-                                        parse_positive_integer)
 from en_tts_cli.arpa_ipa_mapping import ARPA_IPA_MAPPING
 from en_tts_cli.types import ExecutionResult
 
@@ -317,7 +309,7 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
 
 
 def get_sentences(text: str) -> Generator[str, None, None]:
-  pattern = re.compile(r"(\.|\?|\!) +") # [^$]
+  pattern = re.compile(r"(\.|\?|\!) +")  # [^$]
   sentences = pattern.split(text)
   for i in range(0, len(sentences), 2):
     if i + 1 < len(sentences):
@@ -421,7 +413,7 @@ def synthesize(text: str, input_format: Literal["English", "IPA"], logger: Logge
       if loglevel >= 2:
         logfile = work_dir / f"{sentence_id}.wav"
         float_to_wav(wav_inferred_denoised_normalized, logfile)
-        flogger.info(f"Waveglow output: {logfile.absolute()}")
+        flogger.info(f"WaveGlow output: {logfile.absolute()}")
 
       resulting_wavs.append(wav_inferred_denoised_normalized)
       is_last_sentence_in_paragraph = sentence_nr == len(sentences) - 1
@@ -438,7 +430,17 @@ def synthesize(text: str, input_format: Literal["English", "IPA"], logger: Logge
 
   if len(resulting_wavs) > 0:
     resulting_wav = np.concatenate(tuple(resulting_wavs), axis=-1)
-    float_to_wav(resulting_wav, work_dir / "result.wav", sample_rate=wg_synth.hparams.sampling_rate)
+    float_to_wav(resulting_wav, work_dir / "result.unnormed.wav",
+                 sample_rate=wg_synth.hparams.sampling_rate)
+    ffmpeg_normalization = FFmpeg(
+        inputs={
+          str((work_dir / "result.unnormed.wav").absolute()): None
+        },
+        outputs={
+          str((work_dir / "result.wav").absolute()): "-acodec pcm_s16le -ar 22050 -ac 1 -af loudnorm=I=-16:LRA=11:TP=-1.5 -y -hide_banner -loglevel error"
+        },
+    )
+    ffmpeg_normalization.run()
     logger.info(f'Saved to: {work_dir / "result.wav"}')
 
   return True

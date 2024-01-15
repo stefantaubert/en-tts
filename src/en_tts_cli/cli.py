@@ -11,13 +11,11 @@ from tempfile import gettempdir
 from time import perf_counter
 from typing import Callable, List
 
-from en_tts_cli.argparse_helper import (get_optional, parse_path,
-                                                       parse_positive_integer)
+from en_tts_cli.argparse_helper import get_optional, parse_path, parse_positive_integer
 from en_tts_cli.logging_configuration import (configure_root_logger, get_file_logger,
-                                                             init_and_return_loggers,
-                                                             try_init_file_buffer_logger)
-from en_tts_cli.types import ExecutionResult
+                                              init_and_return_loggers, try_init_file_buffer_logger)
 from en_tts_cli.main import init_from_mel_batch_parser
+from en_tts_cli.types import ExecutionResult
 
 __APP_NAME = "en-tts"
 

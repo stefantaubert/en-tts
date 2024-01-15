@@ -1,15 +1,6 @@
-import shutil
-from argparse import ArgumentParser, Namespace
-from collections import OrderedDict
-from logging import Logger, getLogger
-from pathlib import Path
-from tempfile import gettempdir
-from typing import Any, Callable, List
-from typing import OrderedDict as ODType
-from typing import cast
+from logging import getLogger
 
-from en_tts_cli.logging_configuration import configure_root_logger
-from en_tts_cli.main import normalize_eng_text, synthesize
+from en_tts_cli.main import synthesize
 
 
 def test_component_english():
