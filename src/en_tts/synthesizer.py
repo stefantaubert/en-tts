@@ -3,7 +3,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from ffmpy import FFExecutableNotFoundError, FFmpeg
 from tacotron import Synthesizer as TacotronSynthesizer
 from tacotron import get_speaker_mapping
 from tqdm import tqdm
@@ -105,21 +104,3 @@ class Synthesizer():
       return resulting_wav
     return np.zeros((0,))
 
-
-def normalize_audio(path: Path, output: Path):
-  ffmpeg_normalization = FFmpeg(
-    inputs={
-      str(path.absolute()): None
-    },
-    outputs={
-      str(output.absolute()): "-acodec pcm_s16le -ar 22050 -ac 1 -af loudnorm=I=-16:LRA=11:TP=-1.5 -y -hide_banner -loglevel error"
-    },
-  )
-
-  try:
-    ffmpeg_normalization.run()
-  except FFExecutableNotFoundError as error:
-    raise Exception("FFmpeg was not found, therefore no normalization was applied!") from error
-  except Exception as error:
-    raise Exception(
-      "FFmpeg couldn't be executed, therefore no normalization was applied!") from error
