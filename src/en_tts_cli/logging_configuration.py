@@ -83,12 +83,12 @@ def configure_root_logger() -> None:
 
 
 def get_logger() -> Logger:
-  logger = getLogger("en-tts")
+  logger = getLogger("en_tts_cli")
   return logger
 
 
 def get_file_logger() -> Logger:
-  logger = getLogger("file-logger")
+  logger = getLogger("en_tts_cli_file")
   if logger.propagate:
     logger.propagate = False
   return logger

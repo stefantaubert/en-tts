@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from en_tts.transcriber import Transcriber
 from en_tts_tests.helper import get_tests_dir
 

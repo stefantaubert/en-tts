@@ -1,5 +1,4 @@
 from logging import getLogger
-from pathlib import Path
 
 from en_tts.io import save_audio
 from en_tts.synthesizer import Synthesizer
