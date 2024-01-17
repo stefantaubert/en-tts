@@ -1,7 +1,7 @@
 from logging import getLogger
 
 from en_tts.io import save_audio
-from en_tts.synthesizer import Synthesizer
+from en_tts.synthesizer import Synthesizer, normalize_audio
 from en_tts_tests.helper import get_tests_dir
 
 
@@ -14,6 +14,7 @@ def test_component():
 
   audio = s.synthesize(text)
   save_audio(audio, conf_dir / "output.wav")
+  normalize_audio(conf_dir / "output.wav", conf_dir / "output_norm.wav")
   logger = getLogger(__name__)
-  logger.info(conf_dir / "output.wav")
+  logger.info(conf_dir / "output_norm.wav")
   assert len(audio) > 0

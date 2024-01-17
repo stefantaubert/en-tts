@@ -15,8 +15,6 @@ from en_tts.helper import get_default_device, get_sample_count
 from en_tts.logging import get_logger
 from en_tts.resources import get_taco_model, get_wg_model
 
-LJS_DUR_DICT = "https://zenodo.org/record/7499098/files/pronunciations.dict"
-CMU_IPA_DICT = "https://zenodo.org/record/7500805/files/pronunciations.dict"
 TACO_CKP = "https://zenodo.org/records/10107104/files/101000.pt"
 
 
@@ -125,7 +123,3 @@ def normalize_audio(path: Path, output: Path):
   except Exception as error:
     raise Exception(
       "FFmpeg couldn't be executed, therefore no normalization was applied!") from error
-  # if ffmpeg_success:
-  #   logger.info(f'Saved to: {work_dir / "result.wav"}')
-  # else:
-  #   logger.info(f'Saved to: {work_dir / "result.unnormed.wav"}')

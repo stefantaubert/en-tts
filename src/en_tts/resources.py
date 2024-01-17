@@ -21,6 +21,7 @@ TACO_CKP = "https://zenodo.org/records/10107104/files/101000.pt"
 
 def get_ljs_dict(conf_dir: Path) -> PronunciationDict:
   logger = get_logger()
+  conf_dir.mkdir(parents=True, exist_ok=True)
   ljs_dict_path = conf_dir / "ljs.dict"
   ljs_dict_pkl_path = conf_dir / "ljs.dict.pkl"
 
@@ -40,6 +41,7 @@ def get_ljs_dict(conf_dir: Path) -> PronunciationDict:
 
 def get_cmu_dict(conf_dir: Path) -> PronunciationDict:
   logger = get_logger()
+  conf_dir.mkdir(parents=True, exist_ok=True)
   cmu_dict_path = conf_dir / "cmu.dict"
   cmu_dict_pkl_path = conf_dir / "cmu.dict.pkl"
 
@@ -58,6 +60,7 @@ def get_cmu_dict(conf_dir: Path) -> PronunciationDict:
 
 def get_wg_model(conf_dir: Path, device: torch.device) -> CheckpointWaveglow:
   logger = get_logger()
+  conf_dir.mkdir(parents=True, exist_ok=True)
   wg_path = conf_dir / "waveglow.pt"
   wg_orig_path = conf_dir / "waveglow_orig.pt"
 
@@ -74,6 +77,7 @@ def get_wg_model(conf_dir: Path, device: torch.device) -> CheckpointWaveglow:
 
 def get_taco_model(conf_dir: Path, device: torch.device) -> CheckpointDict:
   logger = get_logger()
+  conf_dir.mkdir(parents=True, exist_ok=True)
   taco_path = conf_dir / "tacotron.pt"
 
   if not taco_path.is_file():

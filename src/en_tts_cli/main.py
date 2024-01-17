@@ -1,4 +1,3 @@
-
 from argparse import ArgumentParser, Namespace
 from typing import Callable, Optional
 

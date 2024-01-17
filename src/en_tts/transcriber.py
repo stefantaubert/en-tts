@@ -29,7 +29,6 @@ from en_tts.resources import get_cmu_dict, get_ljs_dict
 
 LJS_DUR_DICT = "https://zenodo.org/record/7499098/files/pronunciations.dict"
 CMU_IPA_DICT = "https://zenodo.org/record/7500805/files/pronunciations.dict"
-TACO_CKP = "https://zenodo.org/records/10107104/files/101000.pt"
 
 
 class Transcriber():
