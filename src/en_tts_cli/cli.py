@@ -1,6 +1,6 @@
 import argparse
-import logging
 import platform
+import shutil
 import sys
 from argparse import ArgumentParser
 from importlib.metadata import version
@@ -9,66 +9,77 @@ from pathlib import Path
 from pkgutil import iter_modules
 from tempfile import gettempdir
 from time import perf_counter
-from typing import Callable, List
+from typing import Callable, Generator, List, Tuple
 
-from en_tts_cli.argparse_helper import get_optional, parse_path, parse_positive_integer
-from en_tts_cli.logging_configuration import (configure_root_logger, get_file_logger,
-                                              init_and_return_loggers, try_init_file_buffer_logger)
-from en_tts_cli.main import init_from_mel_batch_parser
-from en_tts_cli.types import ExecutionResult
+from en_tts_cli.globals import get_conf_dir, get_work_dir
+from en_tts_cli.logging_configuration import (configure_root_logger, get_file_logger, get_logger,
+                                              init_main_logger, try_init_file_buffer_logger)
+from en_tts_cli.main import init_synthesize_eng_parser, init_synthesize_ipa_parser
 
 __APP_NAME = "en-tts"
 
 __version__ = version(__APP_NAME)
 
 INVOKE_HANDLER_VAR = "invoke_handler"
-# DEFAULT_LOGGING_BUFFER_CAP = 1000000000
-DEFAULT_LOGGING_BUFFER_CAP = 1
 
 
 def formatter(prog):
   return argparse.ArgumentDefaultsHelpFormatter(prog, max_help_position=40)
 
 
+def print_features():
+  parsers = get_parsers()
+  for command, description, method in parsers:
+    print(f"- `{command}`: {description}")
+
+
+def get_parsers() -> Generator[Tuple[str, str, Callable], None, None]:
+  yield from (
+    ("synthesize", "synthesize English texts", init_synthesize_eng_parser),
+    ("synthesize-ipa", "synthesize English texts transcribed in IPA", init_synthesize_ipa_parser),
+  )
+
+
 def _init_parser():
   main_parser = ArgumentParser(
     formatter_class=formatter,
+    description="Command-line interface for synthesizing English texts into speech.",
   )
   main_parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
-  # subparsers = main_parser.add_subparsers(help="description")
-  default_log_path = Path(gettempdir()) / f"{__APP_NAME}.log"
+  subparsers = main_parser.add_subparsers(help="description")
 
-  main_parser.set_defaults(**{
-    INVOKE_HANDLER_VAR: init_from_mel_batch_parser(main_parser),
-  })
-  logging_group = main_parser.add_argument_group("logging arguments")
-  logging_group.add_argument("--log", type=get_optional(parse_path), metavar="FILE",
-                              nargs="?", const=None, help="path to write the log", default=default_log_path)
-  logging_group.add_argument("--buffer-capacity", type=parse_positive_integer, default=DEFAULT_LOGGING_BUFFER_CAP,
-                              metavar="CAPACITY", help="amount of logging lines that should be buffered before they are written to the log-file")
-  logging_group.add_argument("--debug", action="store_true",
-                              help="include debugging information in log")
+  for command, description, method in get_parsers():
+    method_parser = subparsers.add_parser(
+      command, help=description, formatter_class=formatter)
+    # init parser
+    invoke_method = method(method_parser)
+    method_parser.set_defaults(**{
+      INVOKE_HANDLER_VAR: invoke_method,
+    })
+
+    logging_group = method_parser.add_argument_group("logging arguments")
+    # logging_group.add_argument("--work-directory", type=parse_path, metavar="DIRECTORY",
+    #                            help="path to write the log", default=Path(gettempdir()) / "en-tts")
+    logging_group.add_argument("--debug", action="store_true",
+                               help="include debugging information in log")
 
   return main_parser
 
 
-def configure_logger(productive: bool) -> None:
-  loglevel = logging.INFO if productive else logging.DEBUG
-  main_logger = getLogger()
-  main_logger.setLevel(loglevel)
-  main_logger.manager.disable = logging.NOTSET
-  if len(main_logger.handlers) > 0:
-    console = main_logger.handlers[0]
-  else:
-    console = logging.StreamHandler()
-    main_logger.addHandler(console)
+def reset_work_dir():
+  root_logger = getLogger()
 
-  logging_formatter = logging.Formatter(
-    '[%(asctime)s.%(msecs)03d] (%(levelname)s) %(message)s',
-    '%Y/%m/%d %H:%M:%S',
-  )
-  console.setFormatter(logging_formatter)
-  console.setLevel(loglevel)
+  work_dir = get_work_dir()
+
+  try:
+    if work_dir.is_dir():
+      root_logger.debug("Deleting working directory ...")
+      shutil.rmtree(work_dir)
+    root_logger.debug("Creating working directory ...")
+    work_dir.mkdir(parents=False, exist_ok=False)
+  except Exception as ex:
+    root_logger.exception("Working directory couldn't be resetted!", exc_info=ex, stack_info=True)
+    sys.exit(1)
 
 
 def parse_args(args: List[str]) -> None:
@@ -95,17 +106,26 @@ def parse_args(args: List[str]) -> None:
     parser.print_help()
     sys.exit(0)
 
-  invoke_handler: Callable[..., ExecutionResult] = getattr(ns, INVOKE_HANDLER_VAR)
+  invoke_handler: Callable[..., bool] = getattr(ns, INVOKE_HANDLER_VAR)
   delattr(ns, INVOKE_HANDLER_VAR)
-  log_to_file = ns.log is not None
-  if log_to_file:
-    # log_to_file = try_init_file_logger(ns.log, local_debugging or ns.debug)
-    log_to_file = try_init_file_buffer_logger(
-      ns.log, local_debugging or ns.debug, ns.buffer_capacity)
-    if not log_to_file:
-      root_logger.warning("Logging to file is not possible.")
+  conf_dir = get_conf_dir()
+  if not conf_dir.is_dir():
+    root_logger.debug("Creating configuration directory ...")
+    conf_dir.mkdir(parents=False, exist_ok=False)
+
+  reset_work_dir()
+
+  work_dir = get_work_dir()
+  logfile = work_dir / "output.log"
+  log_to_file = try_init_file_buffer_logger(logfile, local_debugging or ns.debug, 1)
+  if not log_to_file:
+    root_logger.error("Logging to file is not possible.")
+    sys.exit(1)
+
+  init_main_logger()
 
   flogger = get_file_logger()
+
   if not local_debugging:
     sys_version = sys.version.replace('\n', '')
     flogger.debug(f"CLI version: {__version__}")
@@ -124,13 +144,12 @@ def parse_args(args: List[str]) -> None:
   flogger.debug(f"Parsed arguments: {str(ns)}")
 
   start = perf_counter()
-  cmd_flogger, cmd_logger = init_and_return_loggers(__name__)
 
-  # success, changed_anything = invoke_handler(ns, cmd_logger, cmd_flogger)
   try:
-    success = invoke_handler(ns, cmd_logger, cmd_flogger)
+    success = invoke_handler(ns)
   except ValueError as error:
-    cmd_flogger.debug(error)
+    logger = get_logger()
+    logger.debug(error)
     success = False
 
   exit_code = 0
@@ -149,8 +168,9 @@ def parse_args(args: List[str]) -> None:
   flogger.debug(f"Total duration (s): {duration}")
   if log_to_file:
     # path not encapsulated in "" because it is only console out
-    root_logger.info(f"Log: \"{ns.log.absolute()}\"")
+    root_logger.info(f"Log: \"{logfile.absolute()}\"")
     root_logger.info("Writing remaining buffered log lines...")
+
   sys.exit(exit_code)
 
 

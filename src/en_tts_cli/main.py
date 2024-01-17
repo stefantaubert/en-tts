@@ -1,12 +1,10 @@
 
 import pickle
 import re
-import shutil
 from argparse import ArgumentParser, Namespace
 from logging import Logger
 from pathlib import Path
-from tempfile import gettempdir
-from typing import Any, Callable, Generator, Literal, cast
+from typing import Any, Callable, Generator
 
 import numpy as np
 import torch
@@ -16,7 +14,7 @@ from dict_from_g2pE import transcribe_with_g2pE
 from english_text_normalization import *
 from english_text_normalization.normalization_pipeline import (
   execute_pipeline, remove_whitespace_before_sentence_punctuation)
-from ffmpy import FFmpeg
+from ffmpy import FFExecutableNotFoundError, FFmpeg
 from ordered_set import OrderedSet
 from pronunciation_dictionary import (DeserializationOptions, MultiprocessingOptions,
                                       SerializationOptions, load_dict, save_dict)
@@ -37,32 +35,85 @@ from waveglow import Synthesizer as WaveglowSynthesizer
 from waveglow import convert_glow_files, float_to_wav, normalize_wav, try_copy_to
 from waveglow_cli import download_pretrained_model
 
-from en_tts_cli.arpa_ipa_mapping import ARPA_IPA_MAPPING
-from en_tts_cli.types import ExecutionResult
-
-
-def get_device():
-  if torch.cuda.is_available():
-    return torch.device("cuda:0")
-  return torch.device("cpu")
-
-
-def init_from_mel_batch_parser(parser: ArgumentParser) -> Callable[[str, str], None]:
-  parser.description = "Command-line interface for synthesizing English texts into speech."
-  parser.add_argument("input", type=str, metavar="INPUT",
-                      help="text input")
-  return synthesize_ns
-
-
-def synthesize_ns(ns: Namespace, logger: Logger, flogger: Logger) -> ExecutionResult:
-  text = cast(str, ns.input)
-  synthesize(text, "English", logger, flogger)
-
+from en_tts.arpa_ipa_mapping import ARPA_IPA_MAPPING
+from en_tts_cli.argparse_helper import (parse_character, parse_device,
+                                        parse_float_between_zero_and_one,
+                                        parse_non_empty_or_whitespace, parse_non_negative_float,
+                                        parse_non_negative_integer, parse_positive_integer)
+from en_tts_cli.globals import get_conf_dir, get_work_dir
+from en_tts_cli.logging_configuration import get_file_logger, get_logger
 
 LJS_DUR_DICT = "https://zenodo.org/record/7499098/files/pronunciations.dict"
 CMU_IPA_DICT = "https://zenodo.org/record/7500805/files/pronunciations.dict"
 TACO_CKP = "https://zenodo.org/records/10107104/files/101000.pt"
 # WG_CKP = "https://tuc.cloud/index.php/s/yBRaWz5oHrFwigf/download/LJS-v3-580000.pt"
+
+
+def get_default_device():
+  if torch.cuda.is_available():
+    return torch.device("cuda:0")
+  return torch.device("cpu")
+
+
+def init_synthesize_eng_parser(parser: ArgumentParser) -> Callable[[str, str], None]:
+  parser.description = "Synthesize English texts into speech."
+  parser.add_argument("input", type=parse_non_empty_or_whitespace, metavar="INPUT",
+                      help="text input")
+  parser.add_argument("--skip-normalization", action="store_true", help="skip normalization step")
+  parser.add_argument("--skip-sentence-separation", action="store_true",
+                      help="skip sentence separation step")
+  add_common_arguments(parser)
+
+  def parse_ns(ns: Namespace):
+    synthesize_english(ns.input, ns.max_decoder_steps, ns.sigma, ns.denoiser_strength, ns.seed, ns.device,
+                       ns.silence_sentences, ns.silence_paragraphs, ns.loglevel, ns.skip_normalization, ns.skip_sentence_separation)
+  return parse_ns
+
+
+def init_synthesize_ipa_parser(parser: ArgumentParser) -> Callable[[str, str], None]:
+  parser.description = "Synthesize English IPA-transcribed texts into speech."
+  parser.add_argument("input", type=parse_non_empty_or_whitespace, metavar="INPUT",
+                      help="text input")
+  parser.add_argument("--symbol-separator", metavar="SEPARATOR", type=parse_character,
+                      help="character which separates the IPA symbols", default="|")
+  add_common_arguments(parser)
+
+  def parse_ns(ns: Namespace):
+    synthesize_ipa(ns.input, ns.max_decoder_steps, ns.sigma, ns.denoiser_strength, ns.seed,
+                   ns.device, ns.silence_sentences, ns.silence_paragraphs, ns.loglevel, ns.symbol_seperator)
+
+  return parse_ns
+
+
+def add_common_arguments(parser: ArgumentParser) -> None:
+  parser.add_argument("--loglevel", metavar="LEVEL", type=int,
+                      choices=[0, 1, 2], help="log-level", default=0)
+  parser.add_argument("--silence-sentences", metavar="SECONDS", type=parse_non_negative_float,
+                      help="add silence between sentences (in seconds)", default=0.2)
+  parser.add_argument("--silence-paragraphs", metavar="SECONDS", type=parse_non_negative_float,
+                      help="add silence between paragraphs (in seconds)", default=1.0)
+  parser.add_argument("--seed", type=parse_non_negative_integer, metavar="SEED",
+                      help="seed for generating speech", default=0)
+  add_device_argument(parser)
+  add_max_decoder_steps_argument(parser)
+  add_denoiser_and_sigma_arguments(parser)
+
+
+def add_denoiser_and_sigma_arguments(parser: ArgumentParser) -> None:
+  parser.add_argument("--sigma", metavar="SIGMA", type=parse_float_between_zero_and_one,
+                      default=1.0, help="sigma used for WaveGlow synthesis")
+  parser.add_argument("--denoiser-strength", metavar="STRENGTH", default=0.0005,
+                      type=parse_float_between_zero_and_one, help='strength of denoising to remove model bias after WaveGlow synthesis')
+
+
+def add_max_decoder_steps_argument(parser: ArgumentParser) -> None:
+  parser.add_argument('--max-decoder-steps', type=parse_positive_integer, metavar="STEPS",
+                      default=5000, help="maximum step count before synthesis is stopped")
+
+
+def add_device_argument(parser: ArgumentParser) -> None:
+  parser.add_argument("--device", metavar="DEVICE", type=parse_device,
+                      default=get_default_device(), help="use this device, e.g., \"cpu\" or \"cuda:0\"")
 
 
 def get_ljs_dict(conf_dir: Path, logger: Logger):
@@ -127,11 +178,12 @@ def get_taco_model(conf_dir: Path, device: torch.device, logger: Logger):
   return checkpoint
 
 
-def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger, flogger: Logger) -> str:
+def convert_eng_to_ipa(text: str, loglevel: int, symbol_separator: str, skip_normalization: bool, skip_sentence_separation: bool) -> str:
+  logger = get_logger()
+  flogger = get_file_logger()
+  conf_dir = get_conf_dir()
+  work_dir = get_work_dir()
   serialize_log_opts = SerializationOptions("TAB", False, True)
-  loglevel = 1
-  n_jobs = 1
-  maxtasksperchild = None
   punctuation = {".", "!", "?", ",", ":", ";", "\"", "'", "[", "]", "(", ")", "-", "—"}
 
   if loglevel >= 1:
@@ -139,31 +191,37 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
     logfile.write_text(text, "utf-8")
     flogger.info(f"Text: {logfile.absolute()}")
 
-  text_normed = normalize_eng_text(text)
-  if text_normed == text:
-    flogger.info("No normalization applied.")
+  if skip_normalization:
+    flogger.info("Normalization was skipped.")
   else:
-    text = text_normed
-    flogger.info("Normalization was applied.")
-    if loglevel >= 1:
-      logfile = work_dir / "text.normed.txt"
-      logfile.write_text(text, "utf-8")
-      flogger.info(f"Normed text: {logfile.absolute()}")
+    text_normed = normalize_eng_text(text)
+    if text_normed == text:
+      flogger.info("No normalization applied.")
+    else:
+      text = text_normed
+      flogger.info("Normalization was applied.")
+      if loglevel >= 1:
+        logfile = work_dir / "text.normed.txt"
+        logfile.write_text(text, "utf-8")
+        flogger.info(f"Normed text: {logfile.absolute()}")
 
-  sentences = get_sentences(text)
-  text_sentenced = "\n".join(sentences)
-  if text == text_sentenced:
-    flogger.info("No sentence separation applied.")
+  if skip_sentence_separation:
+    flogger.info("Sentence separation was skipped.")
   else:
-    text = text_sentenced
-    flogger.info("Sentence separation was applied.")
-    if loglevel >= 1:
-      logfile = work_dir / "text.sentences.txt"
-      logfile.write_text(text, "utf-8")
-      flogger.info(f"Text (sentences): {logfile.absolute()}")
+    sentences = get_sentences(text)
+    text_sentenced = "\n".join(sentences)
+    if text == text_sentenced:
+      flogger.info("No sentence separation applied.")
+    else:
+      text = text_sentenced
+      flogger.info("Sentence separation was applied.")
+      if loglevel >= 1:
+        logfile = work_dir / "text.sentences.txt"
+        logfile.write_text(text, "utf-8")
+        flogger.info(f"Text (sentences): {logfile.absolute()}")
 
   vocabulary = extract_vocabulary_from_text(
-    text, "\n", " ", False, n_jobs, maxtasksperchild, 2_000_000)
+    text, "\n", " ", False, 1, None, 2_000_000)
 
   if loglevel >= 1:
     logfile = work_dir / "vocabulary.txt"
@@ -172,7 +230,7 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
 
   ljs_dict = get_ljs_dict(conf_dir, logger)
   dict1, oov1 = create_dict_from_dict(vocabulary, ljs_dict, trim={
-  }, split_on_hyphen=False, ignore_case=False, n_jobs=1, maxtasksperchild=maxtasksperchild, chunksize=10_000)
+  }, split_on_hyphen=False, ignore_case=False, n_jobs=1, maxtasksperchild=None, chunksize=10_000)
 
   if loglevel >= 1:
     logfile = work_dir / "dict1.dict"
@@ -184,7 +242,7 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
       flogger.info(f"OOV1: {logfile.absolute()}")
 
   changed_word_count = select_single_pronunciation(dict1, mode="highest-weight", seed=None,
-                                                   mp_options=MultiprocessingOptions(1, maxtasksperchild, 1_000))
+                                                   mp_options=MultiprocessingOptions(1, None, 1_000))
 
   if loglevel >= 1 and changed_word_count > 0:
     logfile = work_dir / "dict1.single.dict"
@@ -194,7 +252,7 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
   oov2 = OrderedSet()
   if len(oov1) > 0:
     dict2, oov2 = create_dict_from_dict(oov1, ljs_dict, trim=punctuation, split_on_hyphen=True,
-                                        ignore_case=True, n_jobs=1, maxtasksperchild=maxtasksperchild, chunksize=10_000)
+                                        ignore_case=True, n_jobs=1, maxtasksperchild=None, chunksize=10_000)
 
     if loglevel >= 1:
       logfile = work_dir / "dict2.dict"
@@ -206,7 +264,7 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
         flogger.info(f"OOV2: {logfile.absolute()}")
 
     changed_word_count = select_single_pronunciation(dict2, mode="highest-weight", seed=None,
-                                                     mp_options=MultiprocessingOptions(1, maxtasksperchild, 1_000))
+                                                     mp_options=MultiprocessingOptions(1, None, 1_000))
 
     if loglevel >= 1 and changed_word_count > 0:
       logfile = work_dir / "dict2.single.dict"
@@ -224,7 +282,7 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
   if len(oov2) > 0:
     cmu_dict = get_cmu_dict(conf_dir, logger)
     dict3, oov3 = create_dict_from_dict(oov2, cmu_dict, trim=punctuation, split_on_hyphen=True,
-                                        ignore_case=True, n_jobs=n_jobs, maxtasksperchild=maxtasksperchild, chunksize=10_000)
+                                        ignore_case=True, n_jobs=1, maxtasksperchild=None, chunksize=10_000)
 
     if loglevel >= 1:
       logfile = work_dir / "dict3.dict"
@@ -236,7 +294,7 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
         flogger.info(f"OOV3: {logfile.absolute()}")
 
     changed_word_count = select_single_pronunciation(dict3, mode="highest-weight", seed=None,
-                                                     mp_options=MultiprocessingOptions(1, maxtasksperchild, 1_000))
+                                                     mp_options=MultiprocessingOptions(1, None, 1_000))
 
     if loglevel >= 1 and changed_word_count > 0:
       logfile = work_dir / "dict3.single.dict"
@@ -260,9 +318,9 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
       flogger.info(f"Dict4 (ARPA): {logfile.absolute()}")
 
     identify_and_apply_mappings(logger, flogger, dict4, ARPA_IPA_MAPPING, partial_mapping=False,
-                                mp_options=MultiprocessingOptions(1, maxtasksperchild, 100_000))
+                                mp_options=MultiprocessingOptions(1, None, 100_000))
     replace_symbols_in_pronunciations(dict4, "( |ˈ|ˌ)(ə|ʌ|ɔ|ɪ|ɛ|ʊ) r", r"\1\2r",
-                                      False, None, MultiprocessingOptions(1, maxtasksperchild, 100_000))
+                                      False, None, MultiprocessingOptions(1, None, 100_000))
 
     if loglevel >= 1:
       logfile = work_dir / "dict4.dict"
@@ -270,7 +328,7 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
       flogger.info(f"Dict4: {logfile.absolute()}")
 
     changed_word_count = select_single_pronunciation(dict4, mode="highest-weight", seed=None,
-                                                     mp_options=MultiprocessingOptions(1, maxtasksperchild, 1_000))
+                                                     mp_options=MultiprocessingOptions(1, None, 1_000))
 
     if loglevel >= 1 and changed_word_count > 0:
       logfile = work_dir / "dict4.single.dict"
@@ -284,8 +342,8 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
       save_dict(dict1, logfile, "utf-8", serialize_log_opts)
       flogger.info(f"Dict1+2+3+4: {logfile.absolute()}")
 
-  text_ipa = transcribe_text_using_dict(dict1, text, "\n", "|", " ", seed=None, ignore_missing=False,
-                                        n_jobs=n_jobs, maxtasksperchild=maxtasksperchild, chunksize=2_000_000)
+  text_ipa = transcribe_text_using_dict(dict1, text, "\n", symbol_separator, " ", seed=None, ignore_missing=False,
+                                        n_jobs=1, maxtasksperchild=None, chunksize=2_000_000)
 
   if loglevel >= 1:
     logfile = work_dir / "ipa.txt"
@@ -293,13 +351,16 @@ def convert_eng_to_ipa(text: str, conf_dir: Path, work_dir: Path, logger: Logger
     flogger.info(f"IPA: {logfile.absolute()}")
 
     logfile = work_dir / "ipa.readable.txt"
-    logfile.write_text(text_ipa.replace("|", ""), "utf-8")
+    logfile.write_text(text_ipa.replace(symbol_separator, ""), "utf-8")
     flogger.info(f"IPA (readable): {logfile.absolute()}")
 
   text_ipa = replace_text(text_ipa, " ", "SIL0", disable_regex=True)
-  text_ipa = replace_text(text_ipa, ",|SIL0", ",|SIL1", disable_regex=True)
-  text_ipa = replace_text(text_ipa, r"(\.|\!|\?)", r"\1|SIL2", disable_regex=False)
-  text_ipa = replace_text(text_ipa, r"(;|:)\|SIL0", r"\1|SIL2", disable_regex=False)
+  text_ipa = replace_text(text_ipa, f",{symbol_separator}SIL0",
+                          f",{symbol_separator}SIL1", disable_regex=True)
+  text_ipa = replace_text(text_ipa, r"(\.|\!|\?)",
+                          rf"\1{symbol_separator}SIL2", disable_regex=False)
+  text_ipa = replace_text(
+    text_ipa, rf"(;|:){re.escape(symbol_separator)}SIL0", rf"\1{symbol_separator}SIL2", disable_regex=False)
 
   if loglevel >= 1:
     logfile = work_dir / "ipa.silence.txt"
@@ -328,38 +389,37 @@ def get_non_empty_lines(s: str):
       yield l
 
 
-def synthesize(text: str, input_format: Literal["English", "IPA"], logger: Logger, flogger: Logger):
-  conf_dir = Path(gettempdir()) / "en-tts"
-  conf_dir.mkdir(parents=True, exist_ok=True)
-  work_dir = conf_dir / "tmp"
-  if work_dir.exists():
-    shutil.rmtree(work_dir)
-  work_dir.mkdir(parents=True, exist_ok=True)
+def synthesize_english(text: str, max_decoder_steps: int, sigma: float, denoiser_strength: float, seed: int, device: torch.device, silence_sentences: float, silence_paragraphs: float, loglevel: int, skip_normalization: bool, skip_sentence_separation: bool):
+  symbol_separator = "|"
 
-  max_decoder_steps = 5000
-  sigma = 1.0
-  denoiser_strength = 0.0005
-  seed = 1
-  device = get_device()
-  silence_sentences = 0.2
-  silence_paragraphs = 1.0
-  loglevel = 1
+  text_ipa = convert_eng_to_ipa(text, loglevel, symbol_separator,
+                                skip_normalization, skip_sentence_separation)
+  synthesize_ipa_core(text_ipa, max_decoder_steps, sigma, denoiser_strength,
+                      seed, device, silence_sentences, silence_paragraphs, loglevel, symbol_separator)
+
+
+def synthesize_ipa(text_ipa: str, max_decoder_steps: int, sigma: float, denoiser_strength: float, seed: int, device: torch.device, silence_sentences: float, silence_paragraphs: float, loglevel: int, symbol_seperator: str):
+  flogger = get_file_logger()
+  work_dir = get_work_dir()
+
+  if loglevel >= 1:
+    logfile = work_dir / "ipa.txt"
+    logfile.write_text(text_ipa, "utf-8")
+    flogger.info(f"IPA: {logfile.absolute()}")
+
+  synthesize_ipa_core(text_ipa, max_decoder_steps, sigma, denoiser_strength,
+                      seed, device, silence_sentences, silence_paragraphs, loglevel, symbol_seperator)
+
+
+def synthesize_ipa_core(text_ipa: str, max_decoder_steps: int, sigma: float, denoiser_strength: float, seed: int, device: torch.device, silence_sentences: float, silence_paragraphs: float, loglevel: int, symbol_seperator: str):
+  logger = get_logger()
+  flogger = get_file_logger()
+  conf_dir = get_conf_dir()
+  work_dir = get_work_dir()
+  taco_checkpoint = get_taco_model(conf_dir, device, logger)
 
   paragraph_sep = "\n\n"
   sentence_sep = "\n"
-
-  if input_format == "English":
-    text_ipa = convert_eng_to_ipa(text, conf_dir, work_dir, logger, flogger)
-  elif input_format == "IPA":
-    text_ipa = text
-    if loglevel >= 1:
-      logfile = work_dir / "ipa.txt"
-      logfile.write_text(text_ipa, "utf-8")
-      flogger.info(f"IPA: {logfile.absolute()}")
-  else:
-    raise NotImplementedError()
-
-  taco_checkpoint = get_taco_model(conf_dir, device, logger)
 
   synth = TacotronSynthesizer(
     checkpoint=taco_checkpoint,
@@ -386,7 +446,7 @@ def synthesize(text: str, input_format: Literal["English", "IPA"], logger: Logge
     for sentence_nr, sentence in enumerate(tqdm(sentences, position=1, desc="Sentence")):
       sentence_id = f"{paragraph_nr+1}-{sentence_nr+1}"
 
-      symbols = sentence.split("|")
+      symbols = sentence.split(symbol_seperator)
       flogger.info(f"Synthesizing {sentence_id} step 1/2...")
       inf_sent_output = synth.infer(
         symbols=symbols,
@@ -433,15 +493,29 @@ def synthesize(text: str, input_format: Literal["English", "IPA"], logger: Logge
     float_to_wav(resulting_wav, work_dir / "result.unnormed.wav",
                  sample_rate=wg_synth.hparams.sampling_rate)
     ffmpeg_normalization = FFmpeg(
-        inputs={
-          str((work_dir / "result.unnormed.wav").absolute()): None
-        },
-        outputs={
-          str((work_dir / "result.wav").absolute()): "-acodec pcm_s16le -ar 22050 -ac 1 -af loudnorm=I=-16:LRA=11:TP=-1.5 -y -hide_banner -loglevel error"
-        },
+      inputs={
+        str((work_dir / "result.unnormed.wav").absolute()): None
+      },
+      outputs={
+        str((work_dir / "result.wav").absolute()): "-acodec pcm_s16le -ar 22050 -ac 1 -af loudnorm=I=-16:LRA=11:TP=-1.5 -y -hide_banner -loglevel error"
+      },
     )
-    ffmpeg_normalization.run()
-    logger.info(f'Saved to: {work_dir / "result.wav"}')
+
+    ffmpeg_success = True
+    try:
+      ffmpeg_normalization.run()
+    except FFExecutableNotFoundError as error:
+      ffmpeg_success = False
+      flogger.warning(
+        "FFmpeg was not found, therefore no normalization was applied!", exc_info=error)
+    except Exception as error:
+      ffmpeg_success = False
+      flogger.warning(
+        "FFmpeg couldn't be executed, therefore no normalization was applied!", exc_info=error)
+    if ffmpeg_success:
+      logger.info(f'Saved to: {work_dir / "result.wav"}')
+    else:
+      logger.info(f'Saved to: {work_dir / "result.unnormed.wav"}')
 
   return True
 

@@ -1,0 +1,85 @@
+
+from pathlib import Path
+
+import torch
+import wget
+from english_text_normalization import *
+from pronunciation_dictionary import (DeserializationOptions, MultiprocessingOptions,
+                                      PronunciationDict, load_dict)
+from tacotron import CheckpointDict
+from tacotron_cli import *
+from waveglow import CheckpointWaveglow, convert_glow_files
+from waveglow_cli import download_pretrained_model
+
+from en_tts.io import load_obj, save_obj
+from en_tts.logging import get_logger
+
+LJS_DUR_DICT = "https://zenodo.org/record/7499098/files/pronunciations.dict"
+CMU_IPA_DICT = "https://zenodo.org/record/7500805/files/pronunciations.dict"
+TACO_CKP = "https://zenodo.org/records/10107104/files/101000.pt"
+
+
+def get_ljs_dict(conf_dir: Path) -> PronunciationDict:
+  logger = get_logger()
+  ljs_dict_path = conf_dir / "ljs.dict"
+  ljs_dict_pkl_path = conf_dir / "ljs.dict.pkl"
+
+  if not ljs_dict_path.is_file():
+    logger.info("Downloading LJS dictionary ...")
+    wget.download(LJS_DUR_DICT, str(ljs_dict_path.absolute()))
+    logger.info("Loading LJS dictionary...")
+    # 78k lines
+    ljs_dict = load_dict(ljs_dict_path, "UTF-8", DeserializationOptions(
+      False, False, False, True), MultiprocessingOptions(1, None, 100_000))
+    save_obj(ljs_dict, ljs_dict_pkl_path)
+  else:
+    logger.info("Loading LJS dictionary...")
+    ljs_dict: PronunciationDict = load_obj(ljs_dict_pkl_path)
+  return ljs_dict
+
+
+def get_cmu_dict(conf_dir: Path) -> PronunciationDict:
+  logger = get_logger()
+  cmu_dict_path = conf_dir / "cmu.dict"
+  cmu_dict_pkl_path = conf_dir / "cmu.dict.pkl"
+
+  if not cmu_dict_path.is_file():
+    logger.info("Downloading CMU dictionary...")
+    wget.download(CMU_IPA_DICT, str(cmu_dict_path.absolute()))
+
+    logger.info("Loading CMU dictionary...")
+    cmu_dict = load_dict(cmu_dict_path, "UTF-8", DeserializationOptions(
+      False, False, False, False), MultiprocessingOptions(1, None, 100_000))
+    save_obj(cmu_dict, cmu_dict_pkl_path)
+  else:
+    cmu_dict: PronunciationDict = load_obj(cmu_dict_pkl_path)
+  return cmu_dict
+
+
+def get_wg_model(conf_dir: Path, device: torch.device) -> CheckpointWaveglow:
+  logger = get_logger()
+  wg_path = conf_dir / "waveglow.pt"
+  wg_orig_path = conf_dir / "waveglow_orig.pt"
+
+  if not wg_path.is_file():
+    logger.info("Downloading Waveglow checkpoint...")
+    download_pretrained_model(wg_orig_path, version=3)
+    wg_checkpoint = convert_glow_files(wg_orig_path, wg_path, device, keep_orig=False)
+    # wget.download(WG_CKP, str(wg_path.absolute()))
+  else:
+    logger.info("Loading Waveglow checkpoint...")
+    wg_checkpoint = CheckpointWaveglow.load(wg_path, device, logger)
+  return wg_checkpoint
+
+
+def get_taco_model(conf_dir: Path, device: torch.device) -> CheckpointDict:
+  logger = get_logger()
+  taco_path = conf_dir / "tacotron.pt"
+
+  if not taco_path.is_file():
+    logger.info("Downloading Tacotron checkpoint...")
+    wget.download(TACO_CKP, str(taco_path.absolute()))
+
+  logger.info(f"Loading Tacotron checkpoint from: {taco_path.absolute()} ...")
+  checkpoint = load_checkpoint(taco_path, device)
+  return checkpoint

@@ -45,14 +45,13 @@ def add_console_out(logger: Logger):
   set_console_formatter(console)
 
 
-def init_and_return_loggers(name: str) -> Tuple[Logger, Logger]:
-  logger = getLogger(name)
+def init_main_logger() -> Tuple[Logger, Logger]:
+  logger = get_logger()
   flogger = get_file_logger()
   logger.parent = flogger
   logger.handlers.clear()
   assert len(logger.handlers) == 0
   add_console_out(logger)
-  return flogger, logger
 
 
 def set_console_formatter(handler: Handler) -> None:
@@ -83,6 +82,11 @@ def configure_root_logger() -> None:
   console.setLevel(logging.DEBUG)
 
 
+def get_logger() -> Logger:
+  logger = getLogger("en-tts")
+  return logger
+
+
 def get_file_logger() -> Logger:
   logger = getLogger("file-logger")
   if logger.propagate:
@@ -92,7 +96,7 @@ def get_file_logger() -> Logger:
 
 def try_init_file_logger(path: Path, debug: bool = False) -> bool:
   if path.is_dir():
-    logger = getLogger(__name__)
+    logger = get_logger()
     logger.error("Logging path is a directory!")
     return False
   flogger = get_file_logger()
@@ -104,7 +108,7 @@ def try_init_file_logger(path: Path, debug: bool = False) -> bool:
     path.write_text("")
     fh = logging.FileHandler(path)
   except Exception as ex:
-    logger = getLogger(__name__)
+    logger = get_logger()
     logger.error("Logfile couldn't be created!")
     logger.exception(ex)
     return False
@@ -119,7 +123,7 @@ def try_init_file_logger(path: Path, debug: bool = False) -> bool:
 
 def try_init_file_buffer_logger(path: Path, debug: bool = False, buffer_capacity: int = 1000):
   if path.is_dir():
-    logger = getLogger(__name__)
+    logger = get_logger()
     logger.error("Logging path is a directory!")
     return False
   flogger = get_file_logger()
@@ -131,7 +135,7 @@ def try_init_file_buffer_logger(path: Path, debug: bool = False, buffer_capacity
     path.write_text("")
     fh = logging.FileHandler(path)
   except Exception as ex:
-    logger = getLogger(__name__)
+    logger = get_logger()
     logger.error("Logfile couldn't be created!")
     logger.exception(ex)
     return False
