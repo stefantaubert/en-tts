@@ -1,8 +1,11 @@
 
+import logging
+from logging import getLogger
 from pathlib import Path
 
 import numpy as np
 import torch
+from tacotron import LOGGER_NAME as TACOTRON_LOGGER_NAME
 from tacotron import Synthesizer as TacotronSynthesizer
 from tacotron import get_speaker_mapping
 from tqdm import tqdm
@@ -11,10 +14,8 @@ from waveglow import normalize_wav, try_copy_to
 
 from en_tts.globals import DEFAULT_CONF_DIR
 from en_tts.helper import get_default_device, get_sample_count
-from en_tts.logging import get_logger
+from en_tts.logging import LOGGER_NAME
 from en_tts.resources import get_taco_model, get_wg_model
-
-TACO_CKP = "https://zenodo.org/records/10107104/files/101000.pt"
 
 
 class Synthesizer():
@@ -23,7 +24,11 @@ class Synthesizer():
       conf_dir: Path = DEFAULT_CONF_DIR,
       device: torch.device = get_default_device()
   ) -> None:
-    logger = get_logger()
+    logger = getLogger(LOGGER_NAME)
+    tacotron_logger = getLogger(TACOTRON_LOGGER_NAME)
+    tacotron_logger.parent = logger
+    tacotron_logger.setLevel(logging.WARNING)
+
     self._device = device
     self._conf_dir = conf_dir
     tacotron_ckp = get_taco_model(conf_dir, device)
@@ -32,7 +37,6 @@ class Synthesizer():
       checkpoint=tacotron_ckp,
       custom_hparams=None,
       device=device,
-      logger=logger,
     )
     waveglow_ckp = get_wg_model(conf_dir, device)
     self._waveglow_ckp = waveglow_ckp
@@ -48,7 +52,7 @@ class Synthesizer():
     self._symbol_seperator = "|"
 
   def synthesize(self, text_ipa: str, max_decoder_steps: int = 5000, seed: int = 0, sigma: float = 1.0, denoiser_strength: float = 0.0005, silence_sentences: float = 0.2, silence_paragraphs: float = 1.0, silent: bool = False) -> np.ndarray:
-    logger = get_logger()
+    logger = getLogger(LOGGER_NAME)
     resulting_wavs = []
     paragraphs = text_ipa.split(self._paragraph_sep)
     for paragraph_nr, paragraph in enumerate(tqdm(paragraphs, position=0, desc="Paragraph", disable=silent)):
@@ -76,7 +80,7 @@ class Synthesizer():
         del inf_sent_output
         mel_var = try_copy_to(mel_var, self._device)
         mel_var = mel_var.unsqueeze(0)
-        logger.info(f"Synthesizing {sentence_id} step 2/2...")
+        logger.debug(f"Synthesizing {sentence_id} step 2/2...")
         inference_result = self._waveglow.infer(mel_var, sigma, denoiser_strength, seed)
         wav_inferred_denoised_normalized = normalize_wav(inference_result.wav_denoised)
         del mel_var
@@ -103,4 +107,3 @@ class Synthesizer():
       resulting_wav = np.concatenate(tuple(resulting_wavs), axis=-1)
       return resulting_wav
     return np.zeros((0,))
-

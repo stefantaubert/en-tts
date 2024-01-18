@@ -1,7 +1,7 @@
-
 import re
 from collections import OrderedDict
 from copy import deepcopy
+from logging import getLogger
 from pathlib import Path
 from typing import Generator, Optional
 
@@ -24,11 +24,8 @@ from unidecode import unidecode_expect_ascii
 
 from en_tts.arpa_ipa_mapping import ARPA_IPA_MAPPING
 from en_tts.globals import DEFAULT_CONF_DIR
-from en_tts.logging import get_logger
+from en_tts.logging import LOGGER_NAME
 from en_tts.resources import get_cmu_dict, get_ljs_dict
-
-LJS_DUR_DICT = "https://zenodo.org/record/7499098/files/pronunciations.dict"
-CMU_IPA_DICT = "https://zenodo.org/record/7500805/files/pronunciations.dict"
 
 
 class Transcriber():
@@ -85,32 +82,31 @@ class Transcriber():
     self.text_ipa_readable = ""
 
   def transcribe_to_ipa(self, text: str, skip_normalization: bool, skip_sentence_separation: bool) -> str:
-    logger = get_logger()
-    flogger = get_logger()
+    logger = getLogger(LOGGER_NAME)
     self._reset_locals()
 
     if skip_normalization:
-      flogger.info("Normalization was skipped.")
+      logger.debug("Normalization was skipped.")
     else:
       text_normed = normalize_eng_text(text)
       if text_normed == text:
-        flogger.info("No normalization applied.")
+        logger.debug("No normalization applied.")
       else:
         self.text_normed = text_normed
         text = text_normed
-        flogger.info("Normalization was applied.")
+        logger.debug("Normalization was applied.")
 
     if skip_sentence_separation:
-      flogger.info("Sentence separation was skipped.")
+      logger.debug("Sentence separation was skipped.")
     else:
       sentences = get_sentences(text)
       text_sentenced = "\n".join(sentences)
       if text == text_sentenced:
-        flogger.info("No sentence separation applied.")
+        logger.debug("No sentence separation applied.")
       else:
         self.text_sentenced = text_sentenced
         text = text_sentenced
-        flogger.info("Sentence separation was applied.")
+        logger.debug("Sentence separation was applied.")
 
     vocabulary = extract_vocabulary_from_text(
       text, "\n", " ", False, 1, None, 2_000_000)
@@ -168,7 +164,7 @@ class Transcriber():
                                    split_on_hyphen=True, n_jobs=1, maxtasksperchild=None, chunksize=100_000)
       self.dict4_arpa = deepcopy(dict4)
 
-      identify_and_apply_mappings(logger, flogger, dict4, ARPA_IPA_MAPPING, partial_mapping=False,
+      identify_and_apply_mappings(logger, logger, dict4, ARPA_IPA_MAPPING, partial_mapping=False,
                                   mp_options=MultiprocessingOptions(1, None, 100_000))
       replace_symbols_in_pronunciations(dict4, "( |ˈ|ˌ)(ə|ʌ|ɔ|ɪ|ɛ|ʊ) r", r"\1\2r",
                                         False, None, MultiprocessingOptions(1, None, 100_000))

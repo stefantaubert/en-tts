@@ -1,6 +1,1 @@
-from logging import getLogger
-
-
-def get_logger():
-  logger = getLogger("en_tts")
-  return logger
+LOGGER_NAME = "en_tts"

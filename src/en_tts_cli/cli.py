@@ -11,6 +11,7 @@ from tempfile import gettempdir
 from time import perf_counter
 from typing import Callable, Generator, List, Tuple
 
+from en_tts import LOGGER_NAME as EN_TTS_LOGGER_NAME
 from en_tts_cli.globals import get_conf_dir, get_work_dir
 from en_tts_cli.logging_configuration import (configure_root_logger, get_file_logger, get_logger,
                                               init_main_logger, try_init_file_buffer_logger)
@@ -82,6 +83,14 @@ def reset_work_dir():
     sys.exit(1)
 
 
+def ensure_conf_dir_exists():
+  conf_dir = get_conf_dir()
+  if not conf_dir.is_dir():
+    root_logger = getLogger()
+    root_logger.debug("Creating configuration directory ...")
+    conf_dir.mkdir(parents=False, exist_ok=False)
+
+
 def parse_args(args: List[str]) -> None:
   configure_root_logger()
   root_logger = getLogger()
@@ -108,11 +117,8 @@ def parse_args(args: List[str]) -> None:
 
   invoke_handler: Callable[..., bool] = getattr(ns, INVOKE_HANDLER_VAR)
   delattr(ns, INVOKE_HANDLER_VAR)
-  conf_dir = get_conf_dir()
-  if not conf_dir.is_dir():
-    root_logger.debug("Creating configuration directory ...")
-    conf_dir.mkdir(parents=False, exist_ok=False)
 
+  ensure_conf_dir_exists()
   reset_work_dir()
 
   work_dir = get_work_dir()
@@ -124,6 +130,9 @@ def parse_args(args: List[str]) -> None:
 
   init_main_logger()
 
+  core_logger = getLogger(EN_TTS_LOGGER_NAME)
+  logger = get_logger()
+  core_logger.parent = logger
   flogger = get_file_logger()
 
   if not local_debugging:
