@@ -1,3 +1,4 @@
+import logging
 import re
 from collections import OrderedDict
 from copy import deepcopy
@@ -8,23 +9,16 @@ from typing import Generator, Optional
 from dict_from_dict import create_dict_from_dict
 from dict_from_g2pE import transcribe_with_g2pE
 from english_text_normalization import *
-from english_text_normalization.normalization_pipeline import (
-  execute_pipeline, remove_whitespace_before_sentence_punctuation)
 from ordered_set import OrderedSet
 from pronunciation_dictionary import MultiprocessingOptions, PronunciationDict
-from pronunciation_dictionary_utils import (merge_dictionaries, replace_symbols_in_pronunciations,
+from pronunciation_dictionary_utils import (map_symbols_dict, merge_dictionaries,
+                                            replace_symbols_in_pronunciations,
                                             select_single_pronunciation)
-from pronunciation_dictionary_utils_cli.pronunciations_map_symbols_json import \
-  identify_and_apply_mappings
-from tacotron_cli import *
-from txt_utils_cli import extract_vocabulary_from_text
-from txt_utils_cli.replacement import replace_text
-from txt_utils_cli.transcription import transcribe_text_using_dict
+from txt_utils import extract_vocabulary_from_text, replace_text, transcribe_text_using_dict
 from unidecode import unidecode_expect_ascii
 
 from en_tts.arpa_ipa_mapping import ARPA_IPA_MAPPING
 from en_tts.globals import DEFAULT_CONF_DIR
-from en_tts.logging import LOGGER_NAME
 from en_tts.resources import get_cmu_dict, get_ljs_dict
 
 
@@ -33,6 +27,31 @@ class Transcriber():
       self,
       conf_dir: Path = DEFAULT_CONF_DIR,
   ) -> None:
+    logger = getLogger(__name__)
+    tmp_logger = getLogger("english_text_normalization")
+    tmp_logger.parent = logger
+    tmp_logger.setLevel(logging.WARNING)
+
+    tmp_logger = getLogger("dict_from_dict")
+    tmp_logger.parent = logger
+    tmp_logger.setLevel(logging.WARNING)
+
+    tmp_logger = getLogger("dict_from_g2pE")
+    tmp_logger.parent = logger
+    tmp_logger.setLevel(logging.WARNING)
+
+    tmp_logger = getLogger("pronunciation_dictionary")
+    tmp_logger.parent = logger
+    tmp_logger.setLevel(logging.WARNING)
+
+    tmp_logger = getLogger("txt_utils")
+    tmp_logger.parent = logger
+    tmp_logger.setLevel(logging.WARNING)
+
+    tmp_logger = getLogger("pronunciation_dictionary_utils")
+    tmp_logger.parent = logger
+    tmp_logger.setLevel(logging.WARNING)
+
     self._conf_dir = conf_dir
     self._ljs_dict = get_ljs_dict(conf_dir)
     self._cmu_dict = get_cmu_dict(conf_dir)
@@ -82,7 +101,7 @@ class Transcriber():
     self.text_ipa_readable = ""
 
   def transcribe_to_ipa(self, text: str, skip_normalization: bool, skip_sentence_separation: bool) -> str:
-    logger = getLogger(LOGGER_NAME)
+    logger = getLogger(__name__)
     self._reset_locals()
 
     if skip_normalization:
@@ -108,19 +127,21 @@ class Transcriber():
         text = text_sentenced
         logger.debug("Sentence separation was applied.")
 
+    logger.debug("Extracting vocabulary ...")
     vocabulary = extract_vocabulary_from_text(
-      text, "\n", " ", False, 1, None, 2_000_000)
+      text, "\n", " ", False, 1, None, 2_000_000, silent=True)
     self.vocabulary = vocabulary
 
+    logger.debug("Lookup vocabulary ...")
     dict1, oov1 = create_dict_from_dict(vocabulary, self._ljs_dict, trim={
-    }, split_on_hyphen=False, ignore_case=False, n_jobs=1, maxtasksperchild=None, chunksize=10_000)
+    }, split_on_hyphen=False, ignore_case=False, n_jobs=1, maxtasksperchild=None, chunksize=10_000, silent=True)
 
     self.dict1 = deepcopy(dict1)
     if len(oov1) > 0:
       self.oov1 = oov1
 
     changed_word_count = select_single_pronunciation(dict1, mode="highest-weight", seed=None,
-                                                     mp_options=MultiprocessingOptions(1, None, 1_000))
+                                                     mp_options=MultiprocessingOptions(1, None, 1_000), silent=True)
 
     self.dict1_single = None
     if changed_word_count > 0:
@@ -129,13 +150,13 @@ class Transcriber():
     oov2 = OrderedSet()
     if len(oov1) > 0:
       dict2, oov2 = create_dict_from_dict(oov1, self._ljs_dict, trim=self._punctuation, split_on_hyphen=True,
-                                          ignore_case=True, n_jobs=1, maxtasksperchild=None, chunksize=10_000)
+                                          ignore_case=True, n_jobs=1, maxtasksperchild=None, chunksize=10_000, silent=True)
       self.dict2 = deepcopy(dict2)
       if len(oov2) > 0:
         self.oov2 = oov2
 
       changed_word_count = select_single_pronunciation(dict2, mode="highest-weight", seed=None,
-                                                       mp_options=MultiprocessingOptions(1, None, 1_000))
+                                                       mp_options=MultiprocessingOptions(1, None, 1_000), silent=True)
       if changed_word_count > 0:
         self.dict2_single = deepcopy(dict2)
 
@@ -146,13 +167,13 @@ class Transcriber():
     oov3 = OrderedSet()
     if len(oov2) > 0:
       dict3, oov3 = create_dict_from_dict(oov2, self._cmu_dict, trim=self._punctuation, split_on_hyphen=True,
-                                          ignore_case=True, n_jobs=1, maxtasksperchild=None, chunksize=10_000)
+                                          ignore_case=True, n_jobs=1, maxtasksperchild=None, chunksize=10_000, silent=True)
       self.dict3 = deepcopy(dict3)
       if len(oov3) > 0:
         self.oov3 = oov3
 
       changed_word_count = select_single_pronunciation(dict3, mode="highest-weight", seed=None,
-                                                       mp_options=MultiprocessingOptions(1, None, 1_000))
+                                                       mp_options=MultiprocessingOptions(1, None, 1_000), silent=True)
       if changed_word_count > 0:
         self.dict3_single = deepcopy(dict3)
 
@@ -161,17 +182,17 @@ class Transcriber():
 
     if len(oov3) > 0:
       dict4 = transcribe_with_g2pE(oov3, weight=1, trim=self._punctuation,
-                                   split_on_hyphen=True, n_jobs=1, maxtasksperchild=None, chunksize=100_000)
+                                   split_on_hyphen=True, n_jobs=1, maxtasksperchild=None, chunksize=100_000, silent=True)
       self.dict4_arpa = deepcopy(dict4)
 
-      identify_and_apply_mappings(logger, logger, dict4, ARPA_IPA_MAPPING, partial_mapping=False,
-                                  mp_options=MultiprocessingOptions(1, None, 100_000))
+      map_symbols_dict(dict4, ARPA_IPA_MAPPING, partial_mapping=False,
+                       mp_options=MultiprocessingOptions(1, None, 100_000), silent=True)
       replace_symbols_in_pronunciations(dict4, "( |ˈ|ˌ)(ə|ʌ|ɔ|ɪ|ɛ|ʊ) r", r"\1\2r",
-                                        False, None, MultiprocessingOptions(1, None, 100_000))
+                                        False, None, MultiprocessingOptions(1, None, 100_000), silent=True)
       self.dict4 = deepcopy(dict4)
 
       changed_word_count = select_single_pronunciation(dict4, mode="highest-weight", seed=None,
-                                                       mp_options=MultiprocessingOptions(1, None, 1_000))
+                                                       mp_options=MultiprocessingOptions(1, None, 1_000), silent=True)
       if changed_word_count > 0:
         self.dict4_single = deepcopy(dict4)
 
@@ -179,8 +200,9 @@ class Transcriber():
 
       self.dict1_2_3_4 = deepcopy(dict1)
 
+    logger.debug("Transcribe text ...")
     text_ipa = transcribe_text_using_dict(dict1, text, "\n", self._symbol_separator, " ", seed=None, ignore_missing=False,
-                                          n_jobs=1, maxtasksperchild=None, chunksize=2_000_000)
+                                          n_jobs=1, maxtasksperchild=None, chunksize=2_000_000, silent=True)
     self.text_ipa = text_ipa
     self.text_ipa_readable = text_ipa.replace(self._symbol_separator, "")
 

@@ -12,7 +12,6 @@ from waveglow import CheckpointWaveglow, convert_glow_files
 from waveglow_cli import download_pretrained_model
 
 from en_tts.io import load_obj, save_obj
-from en_tts.logging import LOGGER_NAME
 
 LJS_DUR_DICT = "https://zenodo.org/record/7499098/files/pronunciations.dict"
 CMU_IPA_DICT = "https://zenodo.org/record/7500805/files/pronunciations.dict"
@@ -20,7 +19,7 @@ TACO_CKP = "https://zenodo.org/records/10107104/files/101000.pt"
 
 
 def get_ljs_dict(conf_dir: Path) -> PronunciationDict:
-  logger = getLogger(LOGGER_NAME)
+  logger = getLogger(__name__)
   conf_dir.mkdir(parents=True, exist_ok=True)
   ljs_dict_path = conf_dir / "ljs.dict"
   ljs_dict_pkl_path = conf_dir / "ljs.dict.pkl"
@@ -40,7 +39,7 @@ def get_ljs_dict(conf_dir: Path) -> PronunciationDict:
 
 
 def get_cmu_dict(conf_dir: Path) -> PronunciationDict:
-  logger = getLogger(LOGGER_NAME)
+  logger = getLogger(__name__)
   conf_dir.mkdir(parents=True, exist_ok=True)
   cmu_dict_path = conf_dir / "cmu.dict"
   cmu_dict_pkl_path = conf_dir / "cmu.dict.pkl"
@@ -59,7 +58,7 @@ def get_cmu_dict(conf_dir: Path) -> PronunciationDict:
 
 
 def get_wg_model(conf_dir: Path, device: torch.device) -> CheckpointWaveglow:
-  logger = getLogger(LOGGER_NAME)
+  logger = getLogger(__name__)
   conf_dir.mkdir(parents=True, exist_ok=True)
   wg_path = conf_dir / "waveglow.pt"
   wg_orig_path = conf_dir / "waveglow_orig.pt"
@@ -71,19 +70,19 @@ def get_wg_model(conf_dir: Path, device: torch.device) -> CheckpointWaveglow:
     # wget.download(WG_CKP, str(wg_path.absolute()))
   else:
     logger.info("Loading WaveGlow checkpoint ...")  # from: {wg_path.absolute()} ...")
-    wg_checkpoint = CheckpointWaveglow.load(wg_path, device, logger)
+    wg_checkpoint = CheckpointWaveglow.load(wg_path, device)
   return wg_checkpoint
 
 
 def get_taco_model(conf_dir: Path, device: torch.device) -> CheckpointDict:
-  logger = getLogger(LOGGER_NAME)
+  logger = getLogger(__name__)
   conf_dir.mkdir(parents=True, exist_ok=True)
   taco_path = conf_dir / "tacotron.pt"
 
   if not taco_path.is_file():
-    logger.debug("Downloading Tacotron checkpoint ...")
+    logger.info("Downloading Tacotron checkpoint ...")
     wget.download(TACO_CKP, str(taco_path.absolute()))
 
-  logger.debug("Loading Tacotron checkpoint ...")  # from: {taco_path.absolute()} ...")
+  logger.info("Loading Tacotron checkpoint ...")  # from: {taco_path.absolute()} ...")
   checkpoint = load_checkpoint(taco_path, device)
   return checkpoint

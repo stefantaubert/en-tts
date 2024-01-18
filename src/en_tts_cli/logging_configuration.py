@@ -60,7 +60,7 @@ def set_console_formatter(handler: Handler) -> None:
 
 
 def set_logfile_formatter(handler: Handler) -> None:
-  fmt = '[%(asctime)s.%(msecs)03d] (%(levelname)s) %(message)s'
+  fmt = '[%(asctime)s.%(msecs)03d] %(name)s (%(levelname)s) %(message)s'
   datefmt = '%Y/%m/%d %H:%M:%S'
   logging_formatter = Formatter(fmt, datefmt)
   handler.setFormatter(logging_formatter)

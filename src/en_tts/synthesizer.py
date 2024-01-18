@@ -1,11 +1,9 @@
-
 import logging
 from logging import getLogger
 from pathlib import Path
 
 import numpy as np
 import torch
-from tacotron import LOGGER_NAME as TACOTRON_LOGGER_NAME
 from tacotron import Synthesizer as TacotronSynthesizer
 from tacotron import get_speaker_mapping
 from tqdm import tqdm
@@ -14,7 +12,6 @@ from waveglow import normalize_wav, try_copy_to
 
 from en_tts.globals import DEFAULT_CONF_DIR
 from en_tts.helper import get_default_device, get_sample_count
-from en_tts.logging import LOGGER_NAME
 from en_tts.resources import get_taco_model, get_wg_model
 
 
@@ -24,10 +21,13 @@ class Synthesizer():
       conf_dir: Path = DEFAULT_CONF_DIR,
       device: torch.device = get_default_device()
   ) -> None:
-    logger = getLogger(LOGGER_NAME)
-    tacotron_logger = getLogger(TACOTRON_LOGGER_NAME)
+    logger = getLogger(__name__)
+    tacotron_logger = getLogger("tacotron")
     tacotron_logger.parent = logger
     tacotron_logger.setLevel(logging.WARNING)
+    waveglow_logger = getLogger("waveglow")
+    waveglow_logger.parent = logger
+    waveglow_logger.setLevel(logging.WARNING)
 
     self._device = device
     self._conf_dir = conf_dir
@@ -44,7 +44,6 @@ class Synthesizer():
       checkpoint=waveglow_ckp,
       custom_hparams=None,
       device=device,
-      logger=logger,
     )
     self._speaker = list(get_speaker_mapping(tacotron_ckp).keys())[0]
     self._paragraph_sep = "\n\n"
@@ -52,7 +51,7 @@ class Synthesizer():
     self._symbol_seperator = "|"
 
   def synthesize(self, text_ipa: str, max_decoder_steps: int = 5000, seed: int = 0, sigma: float = 1.0, denoiser_strength: float = 0.0005, silence_sentences: float = 0.2, silence_paragraphs: float = 1.0, silent: bool = False) -> np.ndarray:
-    logger = getLogger(LOGGER_NAME)
+    logger = getLogger(__name__)
     resulting_wavs = []
     paragraphs = text_ipa.split(self._paragraph_sep)
     for paragraph_nr, paragraph in enumerate(tqdm(paragraphs, position=0, desc="Paragraph", disable=silent)):

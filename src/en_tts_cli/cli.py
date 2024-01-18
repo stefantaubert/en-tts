@@ -11,7 +11,6 @@ from tempfile import gettempdir
 from time import perf_counter
 from typing import Callable, Generator, List, Tuple
 
-from en_tts import LOGGER_NAME as EN_TTS_LOGGER_NAME
 from en_tts_cli.globals import get_conf_dir, get_work_dir
 from en_tts_cli.logging_configuration import (configure_root_logger, get_file_logger, get_logger,
                                               init_main_logger, try_init_file_buffer_logger)
@@ -130,7 +129,7 @@ def parse_args(args: List[str]) -> None:
 
   init_main_logger()
 
-  core_logger = getLogger(EN_TTS_LOGGER_NAME)
+  core_logger = getLogger("en_tts")
   logger = get_logger()
   core_logger.parent = logger
   flogger = get_file_logger()
@@ -154,31 +153,21 @@ def parse_args(args: List[str]) -> None:
 
   start = perf_counter()
 
+  success = True
   try:
-    success = invoke_handler(ns)
+    invoke_handler(ns)
   except ValueError as error:
+    success = False
     logger = get_logger()
     logger.debug(error)
-    success = False
-
-  exit_code = 0
-  if success:
-    flogger.info("Everything was successful!")
-  else:
-    exit_code = 1
-    # cmd_logger.error(f"Validation error: {success.default_message}")
-    if log_to_file:
-      root_logger.error("Not everything was successful! See log for details.")
-    else:
-      root_logger.error("Not everything was successful!")
-    flogger.error("Not everything was successful!")
 
   duration = perf_counter() - start
   flogger.debug(f"Total duration (s): {duration}")
-  if log_to_file:
+
+  exit_code = 0 if success else 1
+  if log_to_file and (local_debugging or ns.debug):
     # path not encapsulated in "" because it is only console out
     root_logger.info(f"Log: \"{logfile.absolute()}\"")
-    root_logger.info("Writing remaining buffered log lines...")
 
   sys.exit(exit_code)
 
