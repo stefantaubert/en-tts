@@ -1,3 +1,4 @@
+import logging
 from argparse import ArgumentParser, Namespace
 from typing import Callable, Optional
 
@@ -45,7 +46,7 @@ def init_synthesize_ipa_parser(parser: ArgumentParser) -> Callable[[str, str], N
 
 def add_common_arguments(parser: ArgumentParser) -> None:
   parser.add_argument("--loglevel", metavar="LEVEL", type=int,
-                      choices=[0, 1, 2], help="log-level", default=0)
+                      choices=[0, 1, 2], help="log-level", default=1)
   parser.add_argument("--silence-sentences", metavar="SECONDS", type=parse_non_negative_float,
                       help="add silence between sentences (in seconds)", default=0.2)
   parser.add_argument("--silence-paragraphs", metavar="SECONDS", type=parse_non_negative_float,
@@ -75,14 +76,21 @@ def add_device_argument(parser: ArgumentParser) -> None:
 
 
 def synthesize_english(text: str, max_decoder_steps: int, sigma: float, denoiser_strength: float, seed: int, device: torch.device, silence_sentences: float, silence_paragraphs: float, loglevel: int, skip_normalization: bool, skip_sentence_separation: bool):
+  logger = get_logger()
+
+  if loglevel == 0:
+    logger.setLevel(logging.WARNING)
+
   text_ipa = convert_eng_to_ipa(text, loglevel, skip_normalization, skip_sentence_separation)
   synthesize_ipa_core(text_ipa, max_decoder_steps, sigma, denoiser_strength,
                       seed, device, silence_sentences, silence_paragraphs, loglevel)
 
 
 def synthesize_ipa(text_ipa: str, max_decoder_steps: int, sigma: float, denoiser_strength: float, seed: int, device: torch.device, silence_sentences: float, silence_paragraphs: float, loglevel: int):
-  flogger = get_file_logger()
-  work_dir = get_work_dir()
+  logger = get_logger()
+
+  if loglevel == 0:
+    logger.setLevel(logging.WARNING)
 
   if loglevel >= 1:
     try_log_text(text_ipa, "text")
@@ -92,10 +100,7 @@ def synthesize_ipa(text_ipa: str, max_decoder_steps: int, sigma: float, denoiser
 
 
 def convert_eng_to_ipa(text: str, loglevel: int, skip_normalization: bool, skip_sentence_separation: bool) -> str:
-  logger = get_logger()
-  flogger = get_file_logger()
   conf_dir = get_conf_dir()
-  work_dir = get_work_dir()
 
   t = Transcriber(conf_dir)
 
@@ -140,7 +145,6 @@ def convert_eng_to_ipa(text: str, loglevel: int, skip_normalization: bool, skip_
 
 def synthesize_ipa_core(text_ipa: str, max_decoder_steps: int, sigma: float, denoiser_strength: float, seed: int, device: torch.device, silence_sentences: float, silence_paragraphs: float, loglevel: int):
   logger = get_logger()
-  flogger = get_file_logger()
   conf_dir = get_conf_dir()
   work_dir = get_work_dir()
 
@@ -151,10 +155,10 @@ def synthesize_ipa_core(text_ipa: str, max_decoder_steps: int, sigma: float, den
 
   try:
     normalize_audio(work_dir / "result.unnormed.wav", work_dir / "result.wav")
-    logger.info(f'Saved to: {work_dir / "result.wav"}')
+    logger.info(f'Saved audio to: {work_dir / "result.wav"}')
   except Exception as error:
     logger.warning("Normalization was not possible", exc_info=error)
-    logger.info(f'Saved to: {work_dir / "result.unnormed.wav"}')
+    logger.info(f'Saved audio to: {work_dir / "result.unnormed.wav"}')
 
 
 def try_log_dict(dictionary: Optional[PronunciationDict], name: str) -> None:

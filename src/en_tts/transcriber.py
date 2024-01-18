@@ -107,6 +107,7 @@ class Transcriber():
     if skip_normalization:
       logger.debug("Normalization was skipped.")
     else:
+      logger.info("Normalizing ...")
       text_normed = normalize_eng_text(text)
       if text_normed == text:
         logger.debug("No normalization applied.")
@@ -118,6 +119,7 @@ class Transcriber():
     if skip_sentence_separation:
       logger.debug("Sentence separation was skipped.")
     else:
+      logger.info("Separating sentences ...")
       sentences = get_sentences(text)
       text_sentenced = "\n".join(sentences)
       if text == text_sentenced:
@@ -132,7 +134,7 @@ class Transcriber():
       text, "\n", " ", False, 1, None, 2_000_000, silent=True)
     self.vocabulary = vocabulary
 
-    logger.debug("Lookup vocabulary ...")
+    logger.info("Looking up vocabulary ...")
     dict1, oov1 = create_dict_from_dict(vocabulary, self._ljs_dict, trim={
     }, split_on_hyphen=False, ignore_case=False, n_jobs=1, maxtasksperchild=None, chunksize=10_000, silent=True)
 
@@ -200,7 +202,7 @@ class Transcriber():
 
       self.dict1_2_3_4 = deepcopy(dict1)
 
-    logger.debug("Transcribe text ...")
+    logger.debug("Transcribing to IPA ...")
     text_ipa = transcribe_text_using_dict(dict1, text, "\n", self._symbol_separator, " ", seed=None, ignore_missing=False,
                                           n_jobs=1, maxtasksperchild=None, chunksize=2_000_000, silent=True)
     self.text_ipa = text_ipa

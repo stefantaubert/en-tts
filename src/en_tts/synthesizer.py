@@ -53,54 +53,62 @@ class Synthesizer():
   def synthesize(self, text_ipa: str, max_decoder_steps: int = 5000, seed: int = 0, sigma: float = 1.0, denoiser_strength: float = 0.0005, silence_sentences: float = 0.2, silence_paragraphs: float = 1.0, silent: bool = False) -> np.ndarray:
     logger = getLogger(__name__)
     resulting_wavs = []
-    paragraphs = text_ipa.split(self._paragraph_sep)
-    for paragraph_nr, paragraph in enumerate(tqdm(paragraphs, position=0, desc="Paragraph", disable=silent)):
-      sentences = paragraph.split(self._sentence_sep)
-      sentences = [x for x in sentences if x != ""]
-      for sentence_nr, sentence in enumerate(tqdm(sentences, position=1, desc="Sentence", disable=silent)):
-        sentence_id = f"{paragraph_nr+1}-{sentence_nr+1}"
+    paragraph_sentences = [
+      [
+        sentence
+        for sentence in paragraph.split(self._sentence_sep)
+        if sentence != ""
+      ]
+      for paragraph in text_ipa.split(self._paragraph_sep)
+    ]
+    sentence_count = sum(1 for p in paragraph_sentences for s in p)
 
-        symbols = sentence.split(self._symbol_seperator)
-        logger.debug(f"Synthesizing {sentence_id} step 1/2...")
-        inf_sent_output = self._tacotron.infer(
-          symbols=symbols,
-          speaker=self._speaker,
-          include_stats=False,
-          max_decoder_steps=max_decoder_steps,
-          seed=seed,
-        )
+    with tqdm(desc="Synthesizing", total=sentence_count, unit=" sent", disable=silent) as pbar:
+      for paragraph_nr, paragraph in enumerate(paragraph_sentences):
+        for sentence_nr, sentence in enumerate(paragraph):
+          # sentence_id = f"{paragraph_nr+1}-{sentence_nr+1}"
+          symbols = sentence.split(self._symbol_seperator)
+          # logger.debug(f"Synthesizing {sentence_id} step 1/2...")
+          inf_sent_output = self._tacotron.infer(
+            symbols=symbols,
+            speaker=self._speaker,
+            include_stats=False,
+            max_decoder_steps=max_decoder_steps,
+            seed=seed,
+          )
 
-        # if loglevel >= 2:
-        #   logfile = work_dir / f"{sentence_id}.npy"
-        #   np.save(logfile, inf_sent_output.mel_outputs_postnet)
-        #   logger.debug(f"Tacotron output: {logfile.absolute()}")
+          # if loglevel >= 2:
+          #   logfile = work_dir / f"{sentence_id}.npy"
+          #   np.save(logfile, inf_sent_output.mel_outputs_postnet)
+          #   logger.debug(f"Tacotron output: {logfile.absolute()}")
 
-        mel_var = torch.FloatTensor(inf_sent_output.mel_outputs_postnet)
-        del inf_sent_output
-        mel_var = try_copy_to(mel_var, self._device)
-        mel_var = mel_var.unsqueeze(0)
-        logger.debug(f"Synthesizing {sentence_id} step 2/2...")
-        inference_result = self._waveglow.infer(mel_var, sigma, denoiser_strength, seed)
-        wav_inferred_denoised_normalized = normalize_wav(inference_result.wav_denoised)
-        del mel_var
+          mel_var = torch.FloatTensor(inf_sent_output.mel_outputs_postnet)
+          del inf_sent_output
+          mel_var = try_copy_to(mel_var, self._device)
+          mel_var = mel_var.unsqueeze(0)
+          # logger.debug(f"Synthesizing {sentence_id} step 2/2...")
+          inference_result = self._waveglow.infer(mel_var, sigma, denoiser_strength, seed)
+          wav_inferred_denoised_normalized = normalize_wav(inference_result.wav_denoised)
+          del mel_var
 
-        # if loglevel >= 2:
-        #   logfile = work_dir / f"{sentence_id}.wav"
-        #   float_to_wav(wav_inferred_denoised_normalized, logfile)
-        #   flogger.info(f"WaveGlow output: {logfile.absolute()}")
+          # if loglevel >= 2:
+          #   logfile = work_dir / f"{sentence_id}.wav"
+          #   float_to_wav(wav_inferred_denoised_normalized, logfile)
+          #   flogger.info(f"WaveGlow output: {logfile.absolute()}")
 
-        resulting_wavs.append(wav_inferred_denoised_normalized)
-        is_last_sentence_in_paragraph = sentence_nr == len(sentences) - 1
-        if silence_sentences > 0 and not is_last_sentence_in_paragraph:
+          resulting_wavs.append(wav_inferred_denoised_normalized)
+          is_last_sentence_in_paragraph = sentence_nr == len(paragraph) - 1
+          if silence_sentences > 0 and not is_last_sentence_in_paragraph:
+            pause_samples = np.zeros(
+              (get_sample_count(self._waveglow.hparams.sampling_rate, silence_sentences),))
+            resulting_wavs.append(pause_samples)
+          pbar.update(1)
+
+        is_last_paragraph = paragraph_nr == len(paragraph_sentences) - 1
+        if silence_paragraphs > 0 and not is_last_paragraph:
           pause_samples = np.zeros(
-            (get_sample_count(self._waveglow.hparams.sampling_rate, silence_sentences),))
+            (get_sample_count(self._waveglow.hparams.sampling_rate, silence_paragraphs),))
           resulting_wavs.append(pause_samples)
-
-      is_last_paragraph = paragraph_nr == len(paragraphs) - 1
-      if silence_paragraphs > 0 and not is_last_paragraph:
-        pause_samples = np.zeros(
-          (get_sample_count(self._waveglow.hparams.sampling_rate, silence_paragraphs),))
-        resulting_wavs.append(pause_samples)
 
     if len(resulting_wavs) > 0:
       resulting_wav = np.concatenate(tuple(resulting_wavs), axis=-1)
