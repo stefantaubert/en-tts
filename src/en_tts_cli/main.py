@@ -9,11 +9,12 @@ from pronunciation_dictionary import PronunciationDict, SerializationOptions, sa
 from tacotron_cli import *
 
 from en_tts import *
-from en_tts_cli.argparse_helper import (parse_device, parse_float_between_zero_and_one,
+from en_tts_cli.argparse_helper import (get_torch_devices, parse_device,
+                                        parse_float_between_zero_and_one,
                                         parse_non_empty_or_whitespace, parse_non_negative_float,
                                         parse_non_negative_integer, parse_positive_integer)
 from en_tts_cli.globals import get_conf_dir, get_work_dir
-from en_tts_cli.logging_configuration import get_file_logger, get_logger
+from en_tts_cli.logging_configuration import get_file_logger
 
 
 def init_synthesize_eng_parser(parser: ArgumentParser) -> Callable[[str, str], None]:
@@ -45,8 +46,6 @@ def init_synthesize_ipa_parser(parser: ArgumentParser) -> Callable[[str, str], N
 
 
 def add_common_arguments(parser: ArgumentParser) -> None:
-  parser.add_argument("--loglevel", metavar="LEVEL", type=int,
-                      choices=[0, 1, 2], help="log-level", default=1)
   parser.add_argument("--silence-sentences", metavar="SECONDS", type=parse_non_negative_float,
                       help="add silence between sentences (in seconds)", default=0.2)
   parser.add_argument("--silence-paragraphs", metavar="SECONDS", type=parse_non_negative_float,
@@ -71,12 +70,12 @@ def add_max_decoder_steps_argument(parser: ArgumentParser) -> None:
 
 
 def add_device_argument(parser: ArgumentParser) -> None:
-  parser.add_argument("--device", metavar="DEVICE", type=parse_device,
-                      default=get_default_device(), help="use this device, e.g., \"cpu\" or \"cuda:0\"")
+  parser.add_argument("--device", choices=list(get_torch_devices()), type=parse_device,
+                      default=get_default_device(), help="use this device")
 
 
 def synthesize_english(text: str, max_decoder_steps: int, sigma: float, denoiser_strength: float, seed: int, device: torch.device, silence_sentences: float, silence_paragraphs: float, loglevel: int, skip_normalization: bool, skip_sentence_separation: bool):
-  logger = get_logger()
+  logger = logging.getLogger(__name__)
 
   if loglevel == 0:
     logger.setLevel(logging.WARNING)
@@ -87,7 +86,7 @@ def synthesize_english(text: str, max_decoder_steps: int, sigma: float, denoiser
 
 
 def synthesize_ipa(text_ipa: str, max_decoder_steps: int, sigma: float, denoiser_strength: float, seed: int, device: torch.device, silence_sentences: float, silence_paragraphs: float, loglevel: int):
-  logger = get_logger()
+  logger = logging.getLogger(__name__)
 
   if loglevel == 0:
     logger.setLevel(logging.WARNING)
@@ -144,7 +143,7 @@ def convert_eng_to_ipa(text: str, loglevel: int, skip_normalization: bool, skip_
 
 
 def synthesize_ipa_core(text_ipa: str, max_decoder_steps: int, sigma: float, denoiser_strength: float, seed: int, device: torch.device, silence_sentences: float, silence_paragraphs: float, loglevel: int):
-  logger = get_logger()
+  logger = logging.getLogger(__name__)
   conf_dir = get_conf_dir()
   work_dir = get_work_dir()
 

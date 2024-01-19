@@ -22,9 +22,11 @@ class Synthesizer():
       device: torch.device = get_default_device()
   ) -> None:
     logger = getLogger(__name__)
+
     tacotron_logger = getLogger("tacotron")
     tacotron_logger.parent = logger
     tacotron_logger.setLevel(logging.WARNING)
+
     waveglow_logger = getLogger("waveglow")
     waveglow_logger.parent = logger
     waveglow_logger.setLevel(logging.WARNING)

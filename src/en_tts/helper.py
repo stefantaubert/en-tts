@@ -5,7 +5,10 @@ from ffmpy import FFExecutableNotFoundError, FFmpeg
 
 
 def get_default_device():
-  if torch.cuda.is_available():
+  cuda_count = torch.cuda.device_count()
+  if cuda_count == 1:
+    return torch.device("cuda")
+  if cuda_count > 1:
     return torch.device("cuda:0")
   return torch.device("cpu")
 

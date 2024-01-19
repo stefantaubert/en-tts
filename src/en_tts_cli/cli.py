@@ -9,11 +9,11 @@ from pathlib import Path
 from pkgutil import iter_modules
 from tempfile import gettempdir
 from time import perf_counter
-from typing import Callable, Generator, List, Tuple
+from typing import Callable, Generator, List, Tuple, cast
 
 from en_tts_cli.globals import get_conf_dir, get_work_dir
-from en_tts_cli.logging_configuration import (configure_root_logger, get_file_logger, get_logger,
-                                              init_main_logger, try_init_file_buffer_logger)
+from en_tts_cli.logging_configuration import (configure_cli_logger, configure_file_logger,
+                                              configure_root_logger, get_file_logger)
 from en_tts_cli.main import init_synthesize_eng_parser, init_synthesize_ipa_parser
 
 __APP_NAME = "en-tts"
@@ -60,6 +60,8 @@ def _init_parser():
     logging_group = method_parser.add_argument_group("logging arguments")
     # logging_group.add_argument("--work-directory", type=parse_path, metavar="DIRECTORY",
     #                            help="path to write the log", default=Path(gettempdir()) / "en-tts")
+    logging_group.add_argument("--loglevel", metavar="LEVEL", type=int,
+                               choices=[0, 1, 2], help="log-level", default=1)
     logging_group.add_argument("--debug", action="store_true",
                                help="include debugging information in log")
 
@@ -68,18 +70,13 @@ def _init_parser():
 
 def reset_work_dir():
   root_logger = getLogger()
-
   work_dir = get_work_dir()
 
-  try:
-    if work_dir.is_dir():
-      root_logger.debug("Deleting working directory ...")
-      shutil.rmtree(work_dir)
-    root_logger.debug("Creating working directory ...")
-    work_dir.mkdir(parents=False, exist_ok=False)
-  except Exception as ex:
-    root_logger.exception("Working directory couldn't be resetted!", exc_info=ex, stack_info=True)
-    sys.exit(1)
+  if work_dir.is_dir():
+    root_logger.debug("Deleting working directory ...")
+    shutil.rmtree(work_dir)
+  root_logger.debug("Creating working directory ...")
+  work_dir.mkdir(parents=False, exist_ok=False)
 
 
 def ensure_conf_dir_exists():
@@ -114,27 +111,32 @@ def parse_args(args: List[str]) -> None:
     parser.print_help()
     sys.exit(0)
 
+  debug = cast(bool, ns.debug)
+
   invoke_handler: Callable[..., bool] = getattr(ns, INVOKE_HANDLER_VAR)
   delattr(ns, INVOKE_HANDLER_VAR)
 
   ensure_conf_dir_exists()
-  reset_work_dir()
+
+  try:
+    reset_work_dir()
+  except Exception as ex:
+    root_logger.exception("Working directory couldn't be resetted!", exc_info=ex, stack_info=True)
+    sys.exit(1)
 
   work_dir = get_work_dir()
   logfile = work_dir / "output.log"
-  log_to_file = try_init_file_buffer_logger(logfile, local_debugging or ns.debug, 1)
-  if not log_to_file:
-    root_logger.error("Logging to file is not possible.")
+  try:
+    configure_file_logger(logfile, debug, 1)
+  except Exception as ex:
+    root_logger.exception("ogging to file is not possible. Exiting.", exc_info=ex, stack_info=True)
     sys.exit(1)
 
-  init_main_logger()
+  configure_cli_logger()
 
-  core_logger = getLogger("en_tts")
-  logger = get_logger()
-  core_logger.parent = logger
   flogger = get_file_logger()
 
-  if not local_debugging:
+  if debug:
     sys_version = sys.version.replace('\n', '')
     flogger.debug(f"CLI version: {__version__}")
     flogger.debug(f"Python version: {sys_version}")
@@ -148,26 +150,30 @@ def parse_args(args: List[str]) -> None:
     flogger.debug(f"Machine: {my_system.machine}")
     flogger.debug(f"Processor: {my_system.processor}")
 
-  flogger.debug(f"Received arguments: {str(args)}")
-  flogger.debug(f"Parsed arguments: {str(ns)}")
+    flogger.debug(f"Received arguments: {str(args)}")
+    flogger.debug(f"Parsed arguments: {str(ns)}")
 
   start = perf_counter()
-
   success = True
+
   try:
     invoke_handler(ns)
   except ValueError as error:
     success = False
-    logger = get_logger()
-    logger.debug(error)
+    logger = getLogger(__name__)
+    logger.debug("ValueError occurred.", exc_info=error)
+  except Exception as error:
+    success = False
+    logger = getLogger(__name__)
+    logger.debug("Exception occurred.", exc_info=error)
 
   duration = perf_counter() - start
-  flogger.debug(f"Total duration (s): {duration}")
+  flogger.debug(f"Total duration (seconds): {duration}")
 
   exit_code = 0 if success else 1
-  if log_to_file and (local_debugging or ns.debug):
+  if debug:
     # path not encapsulated in "" because it is only console out
-    root_logger.info(f"Log: \"{logfile.absolute()}\"")
+    root_logger.info(f"See log: {logfile.absolute()}")
 
   sys.exit(exit_code)
 
@@ -175,10 +181,6 @@ def parse_args(args: List[str]) -> None:
 def run():
   arguments = sys.argv[1:]
   parse_args(arguments)
-
-
-def run_prod():
-  run()
 
 
 def debug_file_exists():
@@ -191,4 +193,4 @@ def create_debug_file():
 
 
 if __name__ == "__main__":
-  run_prod()
+  run()

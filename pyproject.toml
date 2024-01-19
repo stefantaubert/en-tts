@@ -30,7 +30,6 @@ classifiers = [
   "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
@@ -48,7 +47,7 @@ Homepage = "https://github.com/stefantaubert/en-tts"
 Issues = "https://github.com/stefantaubert/en-tts/issues"
 
 [project.scripts]
-en-tts = "en_tts_cli.cli:run_prod"
+en-tts = "en_tts_cli.cli:run"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -93,7 +92,7 @@ known_third_party = [
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py{38,39,310,311}
+envlist = py{38,39,310}
 isolated_build = True
 
 [testenv]

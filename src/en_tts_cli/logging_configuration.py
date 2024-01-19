@@ -3,7 +3,6 @@ import os
 from logging import Formatter, Handler, Logger, StreamHandler, getLogger
 from logging.handlers import MemoryHandler
 from pathlib import Path
-from typing import Tuple
 
 
 class ConsoleFormatter(logging.Formatter):
@@ -39,19 +38,11 @@ class ConsoleFormatter(logging.Formatter):
     return formatter.format(record)
 
 
-def add_console_out(logger: Logger):
+def add_console_out(logger: Logger) -> StreamHandler:
   console = StreamHandler()
   logger.addHandler(console)
   set_console_formatter(console)
-
-
-def init_main_logger() -> Tuple[Logger, Logger]:
-  logger = get_logger()
-  flogger = get_file_logger()
-  logger.parent = flogger
-  logger.handlers.clear()
-  assert len(logger.handlers) == 0
-  add_console_out(logger)
+  return console
 
 
 def set_console_formatter(handler: Handler) -> None:
@@ -66,84 +57,56 @@ def set_logfile_formatter(handler: Handler) -> None:
   handler.setFormatter(logging_formatter)
 
 
-def configure_root_logger() -> None:
-  # productive = False
-  # loglevel = logging.INFO if productive else logging.DEBUG
-  main_logger = getLogger()
-  main_logger.setLevel(logging.DEBUG)
-  main_logger.manager.disable = logging.NOTSET
-  if len(main_logger.handlers) > 0:
-    console = main_logger.handlers[0]
-  else:
-    console = logging.StreamHandler()
-    main_logger.addHandler(console)
-
-  set_console_formatter(console)
-  console.setLevel(logging.DEBUG)
-
-
-def get_logger() -> Logger:
+def get_cli_logger() -> Logger:
   logger = getLogger("en_tts_cli")
   return logger
 
 
 def get_file_logger() -> Logger:
-  logger = getLogger("en_tts_cli_file")
-  if logger.propagate:
-    logger.propagate = False
-  return logger
+  flogger = getLogger("en_tts_cli_file")
+  if flogger.propagate:
+    flogger.propagate = False
+  return flogger
 
 
-def try_init_file_logger(path: Path, debug: bool = False) -> bool:
-  if path.is_dir():
-    logger = get_logger()
-    logger.error("Logging path is a directory!")
-    return False
+def configure_cli_logger() -> None:
+  cli_logger = getLogger("en_tts_cli")
+  cli_logger.handlers.clear()
+  assert len(cli_logger.handlers) == 0
+  add_console_out(cli_logger)
+
+  core_logger = getLogger("en_tts")
+  core_logger.parent = cli_logger
+
+  file_logger = get_file_logger()
+  cli_logger.parent = file_logger
+
+
+def configure_root_logger() -> None:
+  # productive = False
+  # loglevel = logging.INFO if productive else logging.DEBUG
+  root_logger = getLogger()
+  root_logger.setLevel(logging.DEBUG)
+  root_logger.manager.disable = logging.NOTSET
+  if len(root_logger.handlers) > 0:
+    console = root_logger.handlers[0]
+    set_console_formatter(console)
+  else:
+    console = add_console_out(root_logger)
+
+  console.setLevel(logging.DEBUG)
+
+
+def configure_file_logger(path: Path, debug: bool = False, buffer_capacity: int = 1):
   flogger = get_file_logger()
   assert len(flogger.handlers) == 0
-  try:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.is_file():
-      os.remove(path)
-    path.write_text("")
-    fh = logging.FileHandler(path)
-  except Exception as ex:
-    logger = get_logger()
-    logger.error("Logfile couldn't be created!")
-    logger.exception(ex)
-    return False
-
+  path.parent.mkdir(parents=True, exist_ok=True)
+  if path.is_file():
+    os.remove(path)
+  path.write_text("")
+  fh = logging.FileHandler(path)
   set_logfile_formatter(fh)
-
-  level = logging.DEBUG if debug else logging.INFO
-  fh.setLevel(level)
-  flogger.addHandler(fh)
-  return True
-
-
-def try_init_file_buffer_logger(path: Path, debug: bool = False, buffer_capacity: int = 1000):
-  if path.is_dir():
-    logger = get_logger()
-    logger.error("Logging path is a directory!")
-    return False
-  flogger = get_file_logger()
-  assert len(flogger.handlers) == 0
-  try:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.is_file():
-      os.remove(path)
-    path.write_text("")
-    fh = logging.FileHandler(path)
-  except Exception as ex:
-    logger = get_logger()
-    logger.error("Logfile couldn't be created!")
-    logger.exception(ex)
-    return False
-
-  set_logfile_formatter(fh)
-
   level = logging.DEBUG if debug else logging.INFO
   fh.setLevel(level)
   mh = MemoryHandler(buffer_capacity, logging.ERROR, fh, True)
   flogger.addHandler(mh)
-  return True

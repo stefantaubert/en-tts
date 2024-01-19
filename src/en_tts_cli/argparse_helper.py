@@ -25,6 +25,16 @@ def parse_device(value: str) -> torch.device:
   return device
 
 
+def get_torch_devices():
+  yield "cpu"
+  cuda_count = torch.cuda.device_count()
+  if cuda_count == 1:
+    yield "cuda"
+  else:
+    for i in cuda_count:
+      yield f"cuda:{i}"
+
+
 def parse_codec(value: str) -> str:
   value = parse_required(value)
   try:
