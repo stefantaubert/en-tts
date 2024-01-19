@@ -172,7 +172,7 @@ class Transcriber():
     self.text_ipa = ""
     self.text_ipa_readable = ""
 
-  def transcribe_to_ipa(self, text: str, skip_normalization: bool, skip_sentence_separation: bool) -> str:
+  def transcribe_to_ipa(self, text: str, skip_normalization: bool = False, skip_sentence_separation: bool = False) -> str:
     logger = getLogger(__name__)
     self._reset_locals()
 
@@ -300,7 +300,6 @@ def get_sentences(text: str) -> Generator[str, None, None]:
     else:
       sentence = sentences[i]
     if len(sentence) > 0:
-      # yield from get_non_empty_lines(sentence)
       yield sentence
 
 

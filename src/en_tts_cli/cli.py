@@ -129,7 +129,7 @@ def parse_args(args: List[str]) -> None:
   try:
     configure_file_logger(logfile, debug, 1)
   except Exception as ex:
-    root_logger.exception("ogging to file is not possible. Exiting.", exc_info=ex, stack_info=True)
+    root_logger.exception("Logging to file is not possible. Exiting.", exc_info=ex, stack_info=True)
     sys.exit(1)
 
   configure_cli_logger()
