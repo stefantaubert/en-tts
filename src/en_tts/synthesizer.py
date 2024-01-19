@@ -8,7 +8,7 @@ from tacotron import Synthesizer as TacotronSynthesizer
 from tacotron import get_speaker_mapping
 from tqdm import tqdm
 from waveglow import Synthesizer as WaveglowSynthesizer
-from waveglow import normalize_wav, try_copy_to
+from waveglow import try_copy_to
 
 from en_tts.globals import DEFAULT_CONF_DIR
 from en_tts.helper import get_default_device, get_sample_count
@@ -53,7 +53,6 @@ class Synthesizer():
     self._symbol_seperator = "|"
 
   def synthesize(self, text_ipa: str, max_decoder_steps: int = 5000, seed: int = 0, sigma: float = 1.0, denoiser_strength: float = 0.0005, silence_sentences: float = 0.2, silence_paragraphs: float = 1.0, silent: bool = False) -> np.ndarray:
-    logger = getLogger(__name__)
     resulting_wavs = []
     paragraph_sentences = [
       [
@@ -90,7 +89,7 @@ class Synthesizer():
           mel_var = mel_var.unsqueeze(0)
           # logger.debug(f"Synthesizing {sentence_id} step 2/2...")
           inference_result = self._waveglow.infer(mel_var, sigma, denoiser_strength, seed)
-          wav_inferred_denoised_normalized = normalize_wav(inference_result.wav_denoised)
+          # wav_inferred_denoised_normalized = normalize_wav(inference_result.wav_denoised)
           del mel_var
 
           # if loglevel >= 2:
@@ -98,7 +97,7 @@ class Synthesizer():
           #   float_to_wav(wav_inferred_denoised_normalized, logfile)
           #   flogger.info(f"WaveGlow output: {logfile.absolute()}")
 
-          resulting_wavs.append(wav_inferred_denoised_normalized)
+          resulting_wavs.append(inference_result.wav_denoised)
           is_last_sentence_in_paragraph = sentence_nr == len(paragraph) - 1
           if silence_sentences > 0 and not is_last_sentence_in_paragraph:
             pause_samples = np.zeros(
