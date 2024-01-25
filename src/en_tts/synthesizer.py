@@ -43,8 +43,7 @@ class Synthesizer():
     waveglow_ckp = get_wg_model(conf_dir, device)
     self._waveglow_ckp = waveglow_ckp
     self._waveglow = WaveglowSynthesizer(
-      checkpoint=waveglow_ckp,
-      custom_hparams=None,
+      waveglow_ckp,
       device=device,
     )
     self._speaker = list(get_speaker_mapping(tacotron_ckp).keys())[0]
@@ -88,7 +87,8 @@ class Synthesizer():
           mel_var = try_copy_to(mel_var, self._device)
           mel_var = mel_var.unsqueeze(0)
           # logger.debug(f"Synthesizing {sentence_id} step 2/2...")
-          inference_result = self._waveglow.infer(mel_var, sigma, denoiser_strength, seed)
+          inference_result = self._waveglow.infer(
+            mel_var, sigma=sigma, denoiser_strength=denoiser_strength, seed=seed)
           # wav_inferred_denoised_normalized = normalize_wav(inference_result.wav_denoised)
           del mel_var
 

@@ -63,7 +63,7 @@ def get_cli_logger() -> Logger:
 
 
 def get_file_logger() -> Logger:
-  flogger = getLogger("en_tts_cli_file")
+  flogger = getLogger("file.en_tts_cli")
   if flogger.propagate:
     flogger.propagate = False
   return flogger

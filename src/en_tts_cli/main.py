@@ -1,5 +1,4 @@
 import logging
-import os
 import shutil
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
