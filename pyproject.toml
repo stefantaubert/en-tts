@@ -112,9 +112,9 @@ deps =
   pytest
 commands = 
   pytest
-  en-tts-cli
-  en-tts-cli -v
-  en-tts-cli -h
+  en-tts
+  en-tts -v
+  en-tts -h
 """
 
 [build-system]
