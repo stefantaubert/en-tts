@@ -1,8 +1,8 @@
-import nltk
 from logging import getLogger
 from pathlib import Path
 from typing import cast
 
+import nltk
 import torch
 import wget
 from pronunciation_dictionary import (DeserializationOptions, MultiprocessingOptions,
