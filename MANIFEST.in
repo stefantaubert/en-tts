@@ -1,6 +1,5 @@
-graft \
-  src/en_tts_tests/
-  src/en_tts_cli_tests/
+graft src/en_tts_tests/
+graft src/en_tts_cli_tests/
 
 include \
   pylintrc \
@@ -23,6 +22,5 @@ global-exclude \
   *.so \
   .DS_Store
 
-prune \
-  .*/
-  **/__pycache__
+prune .*/
+prune **/__pycache__/

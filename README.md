@@ -22,7 +22,7 @@ pip install en-tts --user
 en-tts synthesize "When the sunlight strikes raindrops in the air, they act as a prism and form a rainbow."
 ```
 
-The output can be listened [here](./examples/rainbow.wav).
+The output can be listened [here](https://github.com/stefantaubert/en-tts/raw/master/examples/rainbow.wav).
 
 ## Citation
 
