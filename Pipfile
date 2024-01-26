@@ -15,6 +15,10 @@ autoflake = "*"
 twine = "*"
 build = "*"
 wget = "*"
+mypy = "*"
+pandas-stubs = "*"
+types-tqdm = "*"
+
 
 [packages]
 scipy = ">=1.8.0"
@@ -24,6 +28,7 @@ TextGrid = ">=1.5"
 pandas = ">=1.4.0"
 ordered-set = ">=4.1.0"
 matplotlib = ">=3.5.0"
+ffmpy = ">=0.2.3"
 pronunciation-dictionary = ">=0.0.6"
 pronunciation-dictionary-utils = ">=0.0.5"
 english-text-normalization = ">=0.0.3"
@@ -31,8 +36,6 @@ dict-from-dict = ">=0.0.4"
 dict-from-g2pe = ">=0.0.2"
 tacotron-cli = ">=0.0.5"
 waveglow-cli = ">=0.0.2"
-ffmpy = ">=0.2.3"
-txt-utils = ">=0.0.2"
 
 [requires]
-python_version = "3.10"
+python_version = "3.11"

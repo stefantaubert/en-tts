@@ -202,8 +202,7 @@ class Transcriber():
         logger.debug("Sentence separation was applied.")
 
     logger.debug("Extracting vocabulary ...")
-    vocabulary = extract_vocabulary_from_text(
-      text, "\n", " ", False, 1, None, 2_000_000, silent=True)
+    vocabulary = extract_vocabulary_from_text(text, n_jobs=1, chunksize=2_000_000, silent=True)
     self.vocabulary = vocabulary
 
     logger.info("Looking up vocabulary ...")
@@ -275,8 +274,10 @@ class Transcriber():
       self.dict1_2_3_4 = deepcopy(dict1)
 
     logger.debug("Transcribing to IPA ...")
-    text_ipa = transcribe_text_using_dict(dict1, text, "\n", self._symbol_separator, " ", seed=None, ignore_missing=False,
-                                          n_jobs=1, maxtasksperchild=None, chunksize=2_000_000, silent=True)
+    text_ipa = transcribe_text_using_dict(
+      text, dict1,
+      phoneme_sep=self._symbol_separator, n_jobs=1, chunksize=2_000_000, silent=True,
+    )
     self.text_ipa = text_ipa
     self.text_ipa_readable = text_ipa.replace(self._symbol_separator, "")
 
