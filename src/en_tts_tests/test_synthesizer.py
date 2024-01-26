@@ -47,4 +47,3 @@ def test_empty():
   audio = s.synthesize(text)
   assert audio.dtype == np.float64
   assert audio.shape == (0,)
-  

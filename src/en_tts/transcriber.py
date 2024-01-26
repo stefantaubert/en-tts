@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Generator, Optional
 
 from dict_from_dict import create_dict_from_dict
-from dict_from_g2pE import transcribe_with_g2pE
 from english_text_normalization import (add_space_around_dashes, execute_pipeline,
                                         expand_abbreviations, expand_and_a_half, geo_to_george,
                                         normalize_all_units, normalize_am_and_pm,
@@ -40,7 +39,7 @@ from txt_utils import extract_vocabulary_from_text, replace_text, transcribe_tex
 from unidecode import unidecode_expect_ascii
 
 from en_tts.globals import DEFAULT_CONF_DIR
-from en_tts.resources import get_cmu_dict, get_ljs_dict
+from en_tts.resources import download_nltk_data, get_cmu_dict, get_ljs_dict
 
 ARPA_IPA_MAPPING = {
   "AO0": "ɔ",
@@ -145,6 +144,8 @@ class Transcriber():
     tmp_logger = getLogger("pronunciation_dictionary_utils")
     tmp_logger.parent = logger
     tmp_logger.setLevel(logging.WARNING)
+
+    download_nltk_data()
 
     self._conf_dir = conf_dir
     self._ljs_dict = get_ljs_dict(conf_dir)
@@ -276,6 +277,7 @@ class Transcriber():
       self.dict1_2_3 = deepcopy(dict1)
 
     if len(oov3) > 0:
+      from dict_from_g2pE import transcribe_with_g2pE
       dict4 = transcribe_with_g2pE(oov3, weight=1, trim=self._punctuation,
                                    split_on_hyphen=True, n_jobs=1, maxtasksperchild=None, chunksize=100_000, silent=True)
       self.dict4_arpa = deepcopy(dict4)

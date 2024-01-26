@@ -1,3 +1,4 @@
+import nltk
 from logging import getLogger
 from pathlib import Path
 from typing import cast
@@ -88,3 +89,17 @@ def get_taco_model(conf_dir: Path, device: torch.device) -> CheckpointDict:
   logger.info("Loading Tacotron checkpoint ...")  # from: {taco_path.absolute()} ...")
   checkpoint = load_checkpoint(taco_path, device)
   return checkpoint
+
+
+def download_nltk_data():
+  logger = getLogger(__name__)
+  try:
+    nltk.data.find('taggers/averaged_perceptron_tagger.zip')
+  except LookupError:
+    logger.info("Downloading 'averaged_perceptron_tagger' from nltk ...")
+    nltk.download('averaged_perceptron_tagger')
+  try:
+    nltk.data.find('corpora/cmudict.zip')
+  except LookupError:
+    logger.info("Downloading 'cmudict' from nltk ...")
+    nltk.download('cmudict')

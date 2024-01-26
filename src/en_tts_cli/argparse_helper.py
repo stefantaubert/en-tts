@@ -34,7 +34,7 @@ def get_torch_devices():
   if cuda_count == 1:
     yield "cuda"
   else:
-    for i in cuda_count:
+    for i in range(cuda_count):
       yield f"cuda:{i}"
 
 
