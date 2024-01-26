@@ -1,5 +1,7 @@
 from logging import getLogger
 
+import numpy as np
+
 from en_tts.helper import normalize_audio
 from en_tts.io import save_audio
 from en_tts.synthesizer import Synthesizer
@@ -19,3 +21,30 @@ def test_component():
   logger = getLogger(__name__)
   logger.info(conf_dir / "output_norm.wav")
   assert len(audio) > 0
+
+  np.testing.assert_array_almost_equal(
+    audio[:10],
+    np.array(
+      [
+        4.06468927e-04, -1.38543465e-03, -2.93170044e-04, -3.17878075e-05,
+        -1.35282415e-03, -1.24711674e-04, -6.18043647e-04, -2.78891705e-04,
+        9.47587105e-05, -4.59646282e-04
+      ],
+      dtype=np.float64,
+    )
+  )
+  assert audio.dtype == np.float64
+  assert audio.shape == (58682,)
+
+
+def test_empty():
+  conf_dir = get_tests_dir()
+
+  s = Synthesizer(conf_dir)
+
+  text = ''
+
+  audio = s.synthesize(text)
+  assert audio.dtype == np.float64
+  assert audio.shape == (0,)
+  

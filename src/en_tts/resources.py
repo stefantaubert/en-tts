@@ -1,13 +1,13 @@
 from logging import getLogger
 from pathlib import Path
+from typing import cast
 
 import torch
 import wget
-from english_text_normalization import *
 from pronunciation_dictionary import (DeserializationOptions, MultiprocessingOptions,
                                       PronunciationDict, load_dict)
 from tacotron import CheckpointDict
-from tacotron_cli import *
+from tacotron_cli import load_checkpoint
 from waveglow import CheckpointWaveglow, convert_glow_files
 from waveglow_cli import download_pretrained_model
 
@@ -24,6 +24,7 @@ def get_ljs_dict(conf_dir: Path) -> PronunciationDict:
   ljs_dict_path = conf_dir / "ljs.dict"
   ljs_dict_pkl_path = conf_dir / "ljs.dict.pkl"
 
+  ljs_dict: PronunciationDict
   if not ljs_dict_path.is_file():
     logger.info("Downloading LJS dictionary ...")
     wget.download(LJS_DUR_DICT, str(ljs_dict_path.absolute()))
@@ -34,7 +35,7 @@ def get_ljs_dict(conf_dir: Path) -> PronunciationDict:
     save_obj(ljs_dict, ljs_dict_pkl_path)
   else:
     logger.info("Loading LJS dictionary ...")
-    ljs_dict: PronunciationDict = load_obj(ljs_dict_pkl_path)
+    ljs_dict = cast(PronunciationDict, load_obj(ljs_dict_pkl_path))
   return ljs_dict
 
 
@@ -44,6 +45,7 @@ def get_cmu_dict(conf_dir: Path) -> PronunciationDict:
   cmu_dict_path = conf_dir / "cmu.dict"
   cmu_dict_pkl_path = conf_dir / "cmu.dict.pkl"
 
+  cmu_dict: PronunciationDict
   if not cmu_dict_path.is_file():
     logger.info("Downloading CMU dictionary ...")
     wget.download(CMU_IPA_DICT, str(cmu_dict_path.absolute()))
@@ -53,7 +55,7 @@ def get_cmu_dict(conf_dir: Path) -> PronunciationDict:
       False, False, False, False), MultiprocessingOptions(1, None, 100_000))
     save_obj(cmu_dict, cmu_dict_pkl_path)
   else:
-    cmu_dict: PronunciationDict = load_obj(cmu_dict_pkl_path)
+    cmu_dict = cast(PronunciationDict, load_obj(cmu_dict_pkl_path))
   return cmu_dict
 
 

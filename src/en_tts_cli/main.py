@@ -5,12 +5,13 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import torch
-from english_text_normalization import *
 from ordered_set import OrderedSet
 from pronunciation_dictionary import PronunciationDict, SerializationOptions, save_dict
-from tacotron_cli import *
 
-from en_tts import *
+from en_tts.helper import get_default_device, normalize_audio
+from en_tts.io import save_audio
+from en_tts.synthesizer import Synthesizer
+from en_tts.transcriber import Transcriber
 from en_tts_cli.argparse_helper import (get_torch_devices, parse_device,
                                         parse_float_between_zero_and_one,
                                         parse_non_empty_or_whitespace, parse_non_negative_float,
@@ -20,7 +21,7 @@ from en_tts_cli.globals import get_conf_dir, get_work_dir
 from en_tts_cli.logging_configuration import get_file_logger
 
 
-def init_synthesize_eng_parser(parser: ArgumentParser) -> Callable[[str, str], None]:
+def init_synthesize_eng_parser(parser: ArgumentParser) -> Callable[[Namespace], None]:
   parser.description = "Synthesize English texts into speech."
   parser.add_argument("input", type=parse_non_empty_or_whitespace, metavar="INPUT",
                       help="text input")
@@ -29,19 +30,19 @@ def init_synthesize_eng_parser(parser: ArgumentParser) -> Callable[[str, str], N
                       help="skip sentence separation step")
   add_common_arguments(parser)
 
-  def parse_ns(ns: Namespace):
+  def parse_ns(ns: Namespace) -> None:
     synthesize_english(ns.input, ns.max_decoder_steps, ns.sigma, ns.denoiser_strength, ns.seed, ns.device,
                        ns.silence_sentences, ns.silence_paragraphs, ns.loglevel, ns.skip_normalization, ns.skip_sentence_separation, ns.output)
   return parse_ns
 
 
-def init_synthesize_ipa_parser(parser: ArgumentParser) -> Callable[[str, str], None]:
+def init_synthesize_ipa_parser(parser: ArgumentParser) -> Callable[[Namespace], None]:
   parser.description = "Synthesize English IPA-transcribed texts into speech."
   parser.add_argument("input", type=parse_non_empty_or_whitespace, metavar="INPUT",
                       help="text input")
   add_common_arguments(parser)
 
-  def parse_ns(ns: Namespace):
+  def parse_ns(ns: Namespace) -> None:
     synthesize_ipa(ns.input, ns.max_decoder_steps, ns.sigma, ns.denoiser_strength, ns.seed,
                    ns.device, ns.silence_sentences, ns.silence_paragraphs, ns.loglevel, ns.output)
 

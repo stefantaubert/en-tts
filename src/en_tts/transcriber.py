@@ -8,7 +8,29 @@ from typing import Generator, Optional
 
 from dict_from_dict import create_dict_from_dict
 from dict_from_g2pE import transcribe_with_g2pE
-from english_text_normalization import *
+from english_text_normalization import (add_space_around_dashes, execute_pipeline,
+                                        expand_abbreviations, expand_and_a_half, geo_to_george,
+                                        normalize_all_units, normalize_am_and_pm,
+                                        normalize_degrees_minutes_and_seconds,
+                                        normalize_emails_and_at,
+                                        normalize_king_name_followed_by_roman_numeral,
+                                        normalize_numbers, normalize_percent,
+                                        normalize_pounds_shillings_and_pence,
+                                        normalize_second_and_third_when_abbr_with_d,
+                                        normalize_temperatures_general,
+                                        normalize_three_and_four_dots,
+                                        normalize_today_tomorrow_and_tonight,
+                                        remove_dot_after_single_capital_letters,
+                                        remove_double_hyphen_before_or_after_colon,
+                                        remove_equal_sign, remove_sic, remove_stars,
+                                        remove_underscore_characters,
+                                        remove_whitespace_before_sentence_punctuation,
+                                        replace_and_sign_with_word_and, replace_eg_with_for_example,
+                                        replace_etc_with_et_cetera, replace_four_hyphens_by_two,
+                                        replace_hyphen_between_numbers_with_to,
+                                        replace_ie_with_that_is, replace_no_with_number,
+                                        replace_nos_with_numbers, strip,
+                                        write_out_month_abbreviations)
 from ordered_set import OrderedSet
 from pronunciation_dictionary import MultiprocessingOptions, PronunciationDict
 from pronunciation_dictionary_utils import (map_symbols_dict, merge_dictionaries,
@@ -220,7 +242,7 @@ class Transcriber():
     if changed_word_count > 0:
       self.dict1_single = deepcopy(dict1)
 
-    oov2 = OrderedSet()
+    oov2: OrderedSet[str] = OrderedSet()
     if len(oov1) > 0:
       dict2, oov2 = create_dict_from_dict(oov1, self._ljs_dict, trim=self._punctuation, split_on_hyphen=True,
                                           ignore_case=True, n_jobs=1, maxtasksperchild=None, chunksize=10_000, silent=True)
@@ -237,7 +259,7 @@ class Transcriber():
 
       self.dict1_2 = deepcopy(dict1)
 
-    oov3 = OrderedSet()
+    oov3: OrderedSet[str] = OrderedSet()
     if len(oov2) > 0:
       dict3, oov3 = create_dict_from_dict(oov2, self._cmu_dict, trim=self._punctuation, split_on_hyphen=True,
                                           ignore_case=True, n_jobs=1, maxtasksperchild=None, chunksize=10_000, silent=True)
