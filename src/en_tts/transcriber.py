@@ -151,7 +151,7 @@ class Transcriber():
     self._ljs_dict = get_ljs_dict(conf_dir)
     self._cmu_dict = get_cmu_dict(conf_dir)
     self._symbol_separator = "|"
-    self._punctuation = {".", "!", "?", ",", ":", ";", "\"", "'", "[", "]", "(", ")", "-", "—"}
+    self._punctuation = set(".!?,:;\"'[]()-—")
     self.text_normed: Optional[str] = None
     self.text_sentenced: Optional[str] = None
     self.vocabulary: OrderedSet[str] = OrderedSet()
@@ -306,12 +306,25 @@ class Transcriber():
     self.text_ipa_readable = text_ipa.replace(self._symbol_separator, "")
 
     text_ipa = replace_text(text_ipa, " ", "SIL0", disable_regex=True)
-    text_ipa = replace_text(text_ipa, f",{self._symbol_separator}SIL0",
-                            f",{self._symbol_separator}SIL1", disable_regex=True)
-    text_ipa = replace_text(text_ipa, r"(\.|\!|\?)",
-                            rf"\1{self._symbol_separator}SIL2", disable_regex=False)
-    text_ipa = replace_text(
-      text_ipa, rf"(;|:){re.escape(self._symbol_separator)}SIL0", rf"\1{self._symbol_separator}SIL2", disable_regex=False)
+    punctiation_and_silence = (
+      (",", 3),  # 49%
+      (".", 2),  # 64%
+      ("!", 3),  # 45%
+      ("?", 2),  # 53%
+      (":", 3),  # 50%
+      (";", 2),  # 41%
+      (")", 3),  # 63%
+      ("]", 3),
+      ("\"", 2),
+    )
+
+    for punc, silX in punctiation_and_silence:
+      text_ipa = replace_text(
+        text_ipa,
+        f"{punc}{self._symbol_separator}SIL0",
+        f"{punc}{self._symbol_separator}SIL{silX}",
+        disable_regex=True
+      )
 
     return text_ipa
 

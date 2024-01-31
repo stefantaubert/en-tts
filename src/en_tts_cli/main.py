@@ -51,7 +51,7 @@ def init_synthesize_ipa_parser(parser: ArgumentParser) -> Callable[[Namespace], 
 
 def add_common_arguments(parser: ArgumentParser) -> None:
   parser.add_argument("--silence-sentences", metavar="SECONDS", type=parse_non_negative_float,
-                      help="add silence between sentences (in seconds)", default=0.2)
+                      help="add silence between sentences (in seconds)", default=0.4)
   parser.add_argument("--silence-paragraphs", metavar="SECONDS", type=parse_non_negative_float,
                       help="add silence between paragraphs (in seconds)", default=1.0)
   parser.add_argument("--seed", type=parse_non_negative_integer, metavar="SEED",

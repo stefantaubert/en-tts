@@ -1,4 +1,5 @@
 import logging
+from collections import Counter
 from logging import getLogger
 from pathlib import Path
 from typing import cast
@@ -53,7 +54,7 @@ class Synthesizer():
     self._sentence_sep = "\n"
     self._symbol_seperator = "|"
 
-  def synthesize(self, text_ipa: str, max_decoder_steps: int = 5000, seed: int = 0, sigma: float = 1.0, denoiser_strength: float = 0.0005, silence_sentences: float = 0.2, silence_paragraphs: float = 1.0, silent: bool = False) -> npt.NDArray[np.float64]:
+  def synthesize(self, text_ipa: str, max_decoder_steps: int = 5000, seed: int = 0, sigma: float = 1.0, denoiser_strength: float = 0.0005, silence_sentences: float = 0.4, silence_paragraphs: float = 1.0, silent: bool = False) -> npt.NDArray[np.float64]:
     resulting_wavs = []
     paragraph_sentences = [
       [
@@ -64,6 +65,8 @@ class Synthesizer():
       for paragraph in text_ipa.split(self._paragraph_sep)
     ]
     sentence_count = sum(1 for p in paragraph_sentences for s in p)
+
+    max_decoder_steps_reached = []
 
     with tqdm(desc="Synthesizing", total=sentence_count, unit=" sent", disable=silent) as pbar:
       for paragraph_nr, paragraph in enumerate(paragraph_sentences):
@@ -78,6 +81,8 @@ class Synthesizer():
             max_decoder_steps=max_decoder_steps,
             seed=seed,
           )
+
+          max_decoder_steps_reached.append(inf_sent_output.reached_max_decoder_steps)
 
           # if loglevel >= 2:
           #   logfile = work_dir / f"{sentence_id}.npy"
@@ -112,6 +117,12 @@ class Synthesizer():
           pause_samples = np.zeros(
             (get_sample_count(self._waveglow.hparams.sampling_rate, silence_paragraphs),))
           resulting_wavs.append(pause_samples)
+
+    if True in max_decoder_steps_reached:
+      counter = Counter(max_decoder_steps_reached)
+      logger = getLogger(__name__)
+      logger.warning(
+        f"Reached max decoder steps on {counter[True]}/{len(max_decoder_steps_reached)} sentences! Please split up very long sentences.")
 
     if len(resulting_wavs) > 0:
       resulting_wav = cast(npt.NDArray[np.float64], np.concatenate(tuple(resulting_wavs), axis=-1))
