@@ -39,6 +39,7 @@ dependencies = [
   "ordered_set>=4.1.0",
   "ffmpy>=0.2.3",
   "nltk>=3.2.4",
+  "torch>=2.0.0",
   "pronunciation-dictionary>=0.0.6",
   "pronunciation-dictionary-utils>=0.0.5",
   "english-text-normalization>=0.0.3",
